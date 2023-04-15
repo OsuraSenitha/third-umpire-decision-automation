@@ -109,7 +109,7 @@ export default function Home() {
                                 {annotations.length !== 0 && (
                                     <Box sx={styles.resultPane}>
                                         <Typography variant="body1">
-                                            Licence plates detected at
+                                            Objects detected at
                                         </Typography>
                                         <ul>
                                             {annotations.map(

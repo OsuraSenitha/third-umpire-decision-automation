@@ -110,5 +110,5 @@ export const stringifyAnnotation = (annotation) => {
     let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1];
     [x, y, w, h] = [x, y, w, h].map((flt) => Math.round(flt));
 
-    return `x: ${x}, y: ${y}, width: ${w}, height: ${h}, number: ${number}`;
+    return `x: ${x}, y: ${y}, width: ${w}, height: ${h}, object key: ${number}`;
 };
