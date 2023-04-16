@@ -90,3 +90,19 @@ class ImageMemoryObj:
     ax.axis('off')
     plt.tight_layout()
     plt.show()
+
+def img2ColorMat(img):
+  shape = img.shape
+  b = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,0].reshape(-1))))
+  g = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,1].reshape(-1))))
+  r = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,2].reshape(-1))))
+  colorMat = np.array(list(map(lambda c: "#" + c, list(np.char.add(np.char.add(r, g), b)))))
+  colorMat = colorMat.reshape(shape[:-1])
+  return colorMat
+  
+def findColors(img):
+  b = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,0].reshape(-1))))
+  g = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,1].reshape(-1))))
+  r = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,2].reshape(-1))))
+  colors = set(map(lambda c: "#" + c, set(np.char.add(np.char.add(r, g), b))))
+  return colors
