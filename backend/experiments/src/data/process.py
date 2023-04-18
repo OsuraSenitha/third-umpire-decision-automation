@@ -28,13 +28,13 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
 
     return annotations
 
-def splitForYOLO(yolo_dataset_path, data_path, train_weight, val_weight):
+def splitForObjectDetect(object_detect_dataset_path, data_path, train_weight, val_weight):
     subdirs = ["images", "labels"]
     splits = ["train", "val"]
 
     for subdir in subdirs:
         for split in splits:
-            path = f"{yolo_dataset_path}/{subdir}/{split}"
+            path = f"{object_detect_dataset_path}/{subdir}/{split}"
             if not os.path.exists(path):
                 os.makedirs(path)
 
@@ -47,6 +47,6 @@ def splitForYOLO(yolo_dataset_path, data_path, train_weight, val_weight):
         if (i%tot_weight)-train_weight < 0:
             dst_split = "train"
         img_name = os.path.splitext(lbl_name)[0] + ".png"
-        shutil.copy(f"{lbls_src_dir}/{lbl_name}", f"{yolo_dataset_path}/labels/{dst_split}")
-        shutil.copy(f"{imgs_src_dir}/{img_name}", f"{yolo_dataset_path}/images/{dst_split}")
+        shutil.copy(f"{lbls_src_dir}/{lbl_name}", f"{object_detect_dataset_path}/labels/{dst_split}")
+        shutil.copy(f"{imgs_src_dir}/{img_name}", f"{object_detect_dataset_path}/images/{dst_split}")
         
