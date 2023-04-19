@@ -1,7 +1,13 @@
 import cv2 as cv
 
-def drawRects(img, txt_cntnt):
+def decodeAnnotations(txt_cntnt):
     lines = list(map(lambda line: list(map(float, line.split())), txt_cntnt.strip().split("\n")))
+    return lines
+
+def drawRects(img, txt_cntnt):
+    lines = txt_cntnt
+    if type(lines) == str:
+        lines = decodeAnnotations(txt_cntnt)
     drawn_img = img.copy()
     img_h, img_w, _ = img.shape
     for line in lines:
