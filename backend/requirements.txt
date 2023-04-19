@@ -1,2 +1,5 @@
-ultralytics
+onnxruntime
+opencv-python
+numpy
+matplotlib
 boto3

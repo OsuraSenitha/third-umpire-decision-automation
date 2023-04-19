@@ -1,11 +1,12 @@
-from ultralytics import YOLO
-import torch
 import boto3
 import os
+from ml.object_detect import ObjectDetectModel
 
-model = YOLO('yolov8n.pt')
 s3_client = boto3.client("s3")
 BUCKET_NAME = "third-umpire-decision-automation-osura"
+
+onnx_path = "ml/best.onnx"
+model = ObjectDetectModel(onnx_path)
 
 def handler(event, context):
     print(event)
@@ -15,11 +16,9 @@ def handler(event, context):
     download_path = f"/tmp/{filename}"
 
     s3_client.download_file(Bucket=BUCKET_NAME, Key=audio_key, Filename=download_path)
-    pred = model.predict(download_path)[0]
-    cls = pred.cls
-    xywh = pred.xywh
-    cls_col = cls.reshape((-1, 1))
-    annotations = torch.cat((xywh, cls_col), dim=1).tolist()
+    
+    output = model(download_path)
+    annotations = output.tolist()
 
     print(f"Sending annotations: {annotations}")
     
