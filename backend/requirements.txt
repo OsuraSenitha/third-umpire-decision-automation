@@ -1,5 +1,5 @@
 onnxruntime
-opencv-python
+opencv-python-headless
 numpy
 matplotlib
 boto3

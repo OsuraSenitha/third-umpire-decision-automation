@@ -17,6 +17,7 @@ ARG FUNCTION_DIR
 # Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
 
+RUN pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install -r requirements.txt --target ${FUNCTION_DIR}
 
