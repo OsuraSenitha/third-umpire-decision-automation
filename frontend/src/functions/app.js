@@ -21,7 +21,7 @@ const handleUpload = async (lpImg) => {
 
 const handleInfer = async (imgKey) => {
     console.log("Infering");
-    const payload = { bucket: AWS_S3_NAME, key: imgKey };
+    const payload = { imgKey };
     const command = new InvokeCommand({
         FunctionName: AWS_LAMBDA_NAME,
         Payload: JSON.stringify(payload),
@@ -64,7 +64,7 @@ export const annotate = (canvasRef, box, number, imgDim) => {
     context.strokeStyle = "#3dfc03";
     context.lineWidth = 2;
 
-    const [x1, x2, y1, y2] = box;
+    const [x1, y1, x2, y2] = box;
 
     const [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1];
     const can_x = (x / imgDim[0]) * canvas.width;
@@ -107,7 +107,7 @@ export const updateImageDim = (lpImg, setImgDim) => {
 
 export const stringifyAnnotation = (annotation) => {
     const [number, x1, x2, y1, y2] = annotation;
-    let [x, y, w, h] = [x1, y1, x2 - x1, y2 - y1];
+    let [x, y, w, h] = [x1, y1, x1, x2, y1 - y2];
     [x, y, w, h] = [x, y, w, h].map((flt) => Math.round(flt));
 
     return `x: ${x}, y: ${y}, width: ${w}, height: ${h}, object key: ${number}`;
