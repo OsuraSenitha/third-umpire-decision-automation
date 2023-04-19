@@ -11,17 +11,17 @@ model = ObjectDetectModel(onnx_path)
 def handler(event, context):
     print(event)
 
-    audio_key = event["audioKey"]
-    filename = os.path.basename(audio_key)
+    img_key = event["imgKey"]
+    filename = os.path.basename(img_key)
     download_path = f"/tmp/{filename}"
 
-    s3_client.download_file(Bucket=BUCKET_NAME, Key=audio_key, Filename=download_path)
-    
+    s3_client.download_file(Bucket=BUCKET_NAME, Key=img_key, Filename=download_path)
+
     output = model(download_path)
     annotations = output.tolist()
 
     print(f"Sending annotations: {annotations}")
-    
+
     return {
         "statusCode": 200,
         "headers": {
