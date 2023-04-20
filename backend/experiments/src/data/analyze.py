@@ -106,3 +106,8 @@ def findColors(img):
   r = np.array(list(map(lambda num: hex(num)[2:].rjust(2, "0"), img[:,:,2].reshape(-1))))
   colors = set(map(lambda c: "#" + c, set(np.char.add(np.char.add(r, g), b))))
   return colors
+
+def get_mask(seg_img, colors):
+    colorMat = img2ColorMat(seg_img)
+    mask = np.isin(colorMat, colors)
+    return mask

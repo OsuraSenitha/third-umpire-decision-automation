@@ -74,4 +74,11 @@ def splitForObjectDetect(src_data_path, train_weight, val_weight, dst_dataset_pa
         img_name = os.path.splitext(lbl_name)[0] + ".png"
         shutil.copy(f"{lbls_src_dir}/{lbl_name}", f"{dst_dataset_path}/labels/{dst_split}")
         shutil.copy(f"{imgs_src_dir}/{img_name}", f"{dst_dataset_path}/images/{dst_split}")
-        
+
+def cvtAnnotationsTXT2LST(txt_cntnt):
+    lst = list(map(lambda line: [int(line.split()[0]), *list(map(float, line.split()[1:]))], txt_cntnt.strip().split("\n")))
+    return lst
+
+def cvtAnnotationsLST2TXT(lst_cntnt):
+    strn = "\n".join(list(map(lambda box: " ".join([str(int(box[0])), *list(map(lambda num: str(np.round(num, 6)).ljust(8, "0"), box[1:]))]), lst_cntnt)))
+    return strn 

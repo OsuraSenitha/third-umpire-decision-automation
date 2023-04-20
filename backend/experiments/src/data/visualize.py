@@ -1,18 +1,24 @@
 import cv2 as cv
+from .process import cvtAnnotationsTXT2LST
 
-def decodeAnnotations(txt_cntnt):
-    lines = list(map(lambda line: list(map(float, line.split())), txt_cntnt.strip().split("\n")))
-    return lines
-
-def drawRects(img, txt_cntnt):
+def drawRects(img, txt_cntnt, xywh=True, scaled=False, color=(0,255,0)):
     lines = txt_cntnt
     if type(lines) == str:
-        lines = decodeAnnotations(txt_cntnt)
+        lines = cvtAnnotationsTXT2LST(txt_cntnt)
     drawn_img = img.copy()
-    img_h, img_w, _ = img.shape
+    H, W, _ = img.shape
     for line in lines:
         l, x, y, w, h = line
-        l, x, y, w, h = int(l), x*img_w, y*img_h, w*img_w, h*img_h
-        drawn_img = cv.rectangle(drawn_img, (int(x-w/2), int(y-h/2)), (int(x+w/2),int(y+h/2)), (255,0,0), int(min(img_h, img_w)/100))
+        xmin, ymin, xmax, ymax = x, y, w, h
+        if not scaled and xywh:
+            x, w = int(x*W), int(w*W)
+            y, h = int(y*H), int(h*H)
+        if not scaled and not xywh:
+            xmin, ymin, xmax, ymax = int(x*W), int(y*H), int(w*W), int(h*H)
+        if xywh:
+            xmin, ymin = int(x-w/2), int(y-h/2)
+            xmax, ymax = int(x+w/2),int(y+h/2)
+
+        drawn_img = cv.rectangle(drawn_img, (xmin, ymin), (xmax, ymax), color, int(min(H, W)/100))
 
     return drawn_img
