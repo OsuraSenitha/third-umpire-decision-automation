@@ -1,9 +1,14 @@
 from .visualize import drawRects
 from .process import cvtAnnotationsTXT2LST, cvtAnnotationsLST2TXT
 from .analyze import get_mask
+from . import io
+from . import augment
 import numpy as np
 from typing import Tuple, Union
 import cv2 as cv
+import os
+import shutil
+from tqdm.auto import tqdm
 
 def DSSC_defined(img: np.ndarray, crop_data: Tuple) -> np.ndarray:
     [xmin, xmax, ymin, ymax] = crop_data
@@ -205,3 +210,88 @@ def rotate_hue(
     adjusted_img[mask] = shifted_img[mask]
 
     return adjusted_img
+
+def create_dataset(
+        original_data_path: str,
+        augment_data_path: str,
+        total_raw_data_count: int,
+        delete_nums: Tuple[int],
+        emphasis_nums: Tuple[int],
+        augment_rounds: int,
+        emphasis_weight: int,
+    ) -> None:
+    # calculate the expected data counts
+    usable_raw_data_count = total_raw_data_count-len(delete_nums)
+    emphasis_count = len(emphasis_nums)
+    non_emphasis_count = usable_raw_data_count - emphasis_count
+    final_data_count = usable_raw_data_count + augment_rounds*(emphasis_count*emphasis_weight + non_emphasis_count)
+    final_data_count, emphasis_count*emphasis_weight*augment_rounds
+
+    src_images_path = f"{original_data_path}/images"
+    src_bboxes_path = f"{original_data_path}/bboxes"
+    image_names = tuple(filter(lambda name: "___" not in name, os.listdir(src_images_path)))
+
+    # validate the completeness of the raw dataset
+    print("---- Validating Raw Data ----")
+    with tqdm(total=usable_raw_data_count) as pbar:
+        for img_name in image_names:
+            if all(tuple(map(lambda num: str(num) not in img_name, delete_nums))):
+                img_src_path = f"{src_images_path}/{img_name}"
+                seg_src_path = f"{src_images_path}/{img_name}___fuse.png"
+                bbx_src_path = f"{src_bboxes_path}/{os.path.splitext(img_name)[0]}.txt"
+                assert os.path.exists(img_src_path)
+                assert os.path.exists(seg_src_path)
+                assert os.path.exists(bbx_src_path)
+                pbar.update(1)
+
+    # Create the directories
+    dst_imgs_path = f"{augment_data_path}/images"
+    dst_segs_path = f"{augment_data_path}/segmentations"
+    dst_bbxs_path = f"{augment_data_path}/bboxes"
+    for dir in [dst_imgs_path, dst_segs_path, dst_bbxs_path]:
+        os.makedirs(dir, exist_ok=True)
+
+    # Create new dataset
+    print("---- Creating New Data ----")
+    with tqdm(total=final_data_count) as pbar:
+        for img_name in image_names:
+            if all(tuple(map(lambda num: f"({num})" not in img_name, delete_nums))):
+
+                obj_name = os.path.splitext(img_name)[0]
+
+                src_img_path = f"{src_images_path}/{img_name}"
+                src_seg_path = f"{src_images_path}/{img_name}___fuse.png"
+                src_bbx_path = f"{src_bboxes_path}/{obj_name}.txt"
+                src_img = cv.imread(src_img_path)
+                src_seg = cv.imread(src_seg_path)
+                src_bbx = io.readBBoxFile(src_bbx_path, True)
+
+                # copy the raw image itself first
+                dst_img_path = f"{dst_imgs_path}/{obj_name}-0.png"
+                dst_seg_path = f"{dst_segs_path}/{obj_name}-0.png"
+                dst_bbx_path = f"{dst_bbxs_path}/{obj_name}-0.txt"
+                shutil.copy(src_img_path, dst_img_path)
+                shutil.copy(src_seg_path, dst_seg_path)
+                shutil.copy(src_bbx_path, dst_bbx_path)
+                pbar.update(1)
+                # raw_data_count + augment_rounds*(emphasis_count*emphasis_ratio + non_emphasis_count)
+                new_img_count = augment_rounds
+                if any(tuple(map(lambda num: f"({num})" in img_name, emphasis_nums))):
+                    new_img_count = augment_rounds*emphasis_weight
+
+                for i in range(1, new_img_count+1):
+
+                    dst_img, dst_bbx, crop_data = augment.DSSC(src_img, src_bbx)
+                    dst_seg = augment.DSSC_defined(src_seg, crop_data)
+                    
+                    dst_img, dst_bbx, flipped = augment.horizontal_flip(dst_img, dst_bbx)
+                    dst_seg = augment.horizontal_flip_defined(dst_seg, flipped)
+
+                    dst_img = augment.rotate_hue(dst_img, dst_seg)
+                    dst_img = augment.brightness_contrast(dst_img)
+                    dst_img = augment.blur(dst_img)
+                    dst_img = augment.noise(dst_img)
+
+                    io.saveData(dst_img, dst_seg, dst_bbx, augment_data_path, f"{obj_name}-{i}")
+
+                    pbar.update(1)

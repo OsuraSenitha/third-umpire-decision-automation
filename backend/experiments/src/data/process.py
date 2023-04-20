@@ -5,6 +5,7 @@ import os
 import shutil
 import json
 from tqdm.auto import tqdm
+from typing import Tuple
 
 def getBoundingBoxesFromSegmentation(seg_img, labels):
     colorMat = img2ColorMat(seg_img)
@@ -30,15 +31,15 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
 
     return annotations
 
-def segmentationDS2DetectionDS(data_path, label_names):
-    annotations_path = f"{data_path}/annotations"
+def segmentationDS2DetectionDS(data_path: str, label_names:Tuple[str]=["Batsmen", "Ball", "Wicket"]):
+    bboxes_path = f"{data_path}/bboxes"
     classes = {}
     with open(f"{data_path}/classes/classes.json") as handler:
         classes = json.load(handler)
         classes = list(map(lambda obj: {"name":obj["name"], "color": obj["color"]}, classes))
     segments = list(filter(lambda name: "__fuse" in name, os.listdir(f"{data_path}/images")))
-    if not os.path.exists(annotations_path):
-        os.makedirs(annotations_path)
+    if not os.path.exists(bboxes_path):
+        os.makedirs(bboxes_path)
 
     labels = list(filter(lambda cls: cls["name"] in label_names, classes))
     with tqdm(total=len(segments)) as pbar:
@@ -48,13 +49,13 @@ def segmentationDS2DetectionDS(data_path, label_names):
             txt_cntnt = "\n".join(list(map(lambda line: " ".join(list(map(lambda num: str(np.round(num, 6)), line))), boxes)))
             img_f_name = seg[:-11]
             txt_f_name = os.path.splitext(img_f_name)[0]+".txt"
-            with open(f"{annotations_path}/{txt_f_name}", "w") as handler:
+            with open(f"{bboxes_path}/{txt_f_name}", "w") as handler:
                 handler.write(txt_cntnt)
             
             pbar.update(1)
     
-def splitForObjectDetect(src_data_path, train_weight, val_weight, dst_dataset_path):
-    subdirs = ["images", "labels"]
+def splitForObjectDetect(src_dataset_path, train_weight, val_weight, dst_dataset_path):
+    subdirs = ["images", "bboxes", "segmentations"]
     splits = ["train", "val"]
 
     for subdir in subdirs:
@@ -63,17 +64,34 @@ def splitForObjectDetect(src_data_path, train_weight, val_weight, dst_dataset_pa
             if not os.path.exists(path):
                 os.makedirs(path)
 
-    lbls_src_dir = f"{src_data_path}/annotations"
-    imgs_src_dir = f"{src_data_path}/images"
-    lbl_names = os.listdir(lbls_src_dir)
+    src_bbxs_dir = f"{src_dataset_path}/bboxes"
+    src_imgs_dir = f"{src_dataset_path}/images"
+    src_segs_dir = f"{src_dataset_path}/segmentations"
+
+    dst_bbxs_dir = f"{dst_dataset_path}/bboxes"
+    dst_imgs_dir = f"{dst_dataset_path}/images"
+    dst_segs_dir = f"{dst_dataset_path}/segmentations"
+
+    lbl_names = os.listdir(src_bbxs_dir)
     tot_weight = train_weight + val_weight
     for i, lbl_name in enumerate(lbl_names):
         dst_split = "val"
         if (i%tot_weight)-train_weight < 0:
             dst_split = "train"
         img_name = os.path.splitext(lbl_name)[0] + ".png"
-        shutil.copy(f"{lbls_src_dir}/{lbl_name}", f"{dst_dataset_path}/labels/{dst_split}")
-        shutil.copy(f"{imgs_src_dir}/{img_name}", f"{dst_dataset_path}/images/{dst_split}")
+        src_bbx_path = f"{src_bbxs_dir}/{lbl_name}"
+        src_img_path = f"{src_imgs_dir}/{img_name}"
+        src_seg_path = f"{src_segs_dir}/{img_name}"
+        dst_bbx_path = f"{dst_bbxs_dir}/{dst_split}"
+        dst_img_path = f"{dst_imgs_dir}/{dst_split}"
+        dst_seg_path = f"{dst_segs_dir}/{dst_split}"
+
+        shutil.copy(src_bbx_path, dst_bbx_path)
+        shutil.copy(src_img_path, dst_img_path)
+        if os.path.exists(src_seg_path): shutil.copy(src_seg_path, dst_seg_path)
+
+    if len(os.listdir(dst_segs_dir)) == 0:
+        shutil.rmtree(dst_segs_dir)
 
 def cvtAnnotationsTXT2LST(txt_cntnt):
     lst = list(map(lambda line: [int(line.split()[0]), *list(map(float, line.split()[1:]))], txt_cntnt.strip().split("\n")))
