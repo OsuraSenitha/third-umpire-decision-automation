@@ -18,7 +18,6 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
         if len(contours)>0:
             no_parent = hierarchy[0][:,3] == -1
             bounding_rects = []
-            # new_img = seg_img.copy()
             for cont, no_par in zip(contours, no_parent):
                 if no_par:
                     box = cv.boundingRect(cont)
@@ -26,33 +25,9 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
                     x_c, y_c = (x+w/2)/img_w, (y+h/2)/img_h
                     w_c, h_c = w/img_w, h/img_h
                     bounding_rects.append([label_i, x_c, y_c, w_c, h_c])
-                    # new_img = cv.rectangle(seg_img,(x,y),(x+w,y+h),(0,255,0),2)
             annotations.extend(bounding_rects)
 
     return annotations
-
-def segmentationDS2DetectionDS(data_path: str, label_names:Tuple[str]=["Batsmen", "Ball", "Wicket"]):
-    bboxes_path = f"{data_path}/bboxes"
-    classes = {}
-    with open(f"{data_path}/classes/classes.json") as handler:
-        classes = json.load(handler)
-        classes = list(map(lambda obj: {"name":obj["name"], "color": obj["color"]}, classes))
-    segments = list(filter(lambda name: "__fuse" in name, os.listdir(f"{data_path}/images")))
-    if not os.path.exists(bboxes_path):
-        os.makedirs(bboxes_path)
-
-    labels = list(filter(lambda cls: cls["name"] in label_names, classes))
-    with tqdm(total=len(segments)) as pbar:
-        for i, seg in enumerate(segments):
-            img = cv.imread(f"{data_path}/images/{seg}")
-            boxes = getBoundingBoxesFromSegmentation(img, labels)
-            txt_cntnt = "\n".join(list(map(lambda line: " ".join(list(map(lambda num: str(np.round(num, 6)), line))), boxes)))
-            img_f_name = seg[:-11]
-            txt_f_name = os.path.splitext(img_f_name)[0]+".txt"
-            with open(f"{bboxes_path}/{txt_f_name}", "w") as handler:
-                handler.write(txt_cntnt)
-            
-            pbar.update(1)
     
 def splitForObjectDetect(src_dataset_path, train_weight, val_weight, dst_dataset_path):
     subdirs = ["images", "bboxes", "segmentations"]
@@ -97,6 +72,9 @@ def cvtAnnotationsTXT2LST(txt_cntnt):
     lst = list(map(lambda line: [int(line.split()[0]), *list(map(float, line.split()[1:]))], txt_cntnt.strip().split("\n")))
     return lst
 
-def cvtAnnotationsLST2TXT(lst_cntnt):
-    strn = "\n".join(list(map(lambda box: " ".join([str(int(box[0])), *list(map(lambda num: str(np.round(num, 6)).ljust(8, "0"), box[1:]))]), lst_cntnt)))
+def cvtAnnotationsLST2TXT(lst_cntnt, round_deci):
+    if round_deci:
+        strn = "\n".join(list(map(lambda box: " ".join([str(int(box[0])), *list(map(lambda num: str(np.round(num, round_deci)).ljust(8, "0"), box[1:]))]), lst_cntnt)))
+    else:
+        strn = "\n".join(list(map(lambda box: " ".join([str(int(box[0])), *list(map(str, box[1:]))]), lst_cntnt)))
     return strn 

@@ -63,8 +63,11 @@ def getOverlay(img, pts, normalized, color):
     return overlay
 
 
-def drawSegments(img, pts_txt, normalized=True, color_overlay_ratio=0.3):
-    pts_lines = cvtAnnotationsTXT2LST(pts_txt)
+def drawSegments(img, pts_obj, normalized=True, color_overlay_ratio=0.3):
+    if type(pts_obj) == str:
+        pts_lines = cvtAnnotationsTXT2LST(pts_obj)
+    else:
+        pts_lines = pts_obj
     drawn_img = img.copy()
     N = len(pts_lines)
     c_hsv = [(x*1.0/N, 0.5, 0.5) for x in range(N)]

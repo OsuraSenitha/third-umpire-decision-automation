@@ -268,7 +268,7 @@ def create_dataset(
                 src_bbx_path = f"{src_bboxes_path}/{obj_name}.txt"
                 src_img = cv.imread(src_img_path)
                 src_seg = cv.imread(src_seg_path)
-                src_bbx = io.readBBoxFile(src_bbx_path)
+                src_bbx = io.readAnnotationsFile(src_bbx_path)
                 if src_bbx.strip() == "":
                     pbar.update(new_img_count + 1)
                     continue

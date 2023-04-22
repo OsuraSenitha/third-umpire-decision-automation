@@ -1,9 +1,33 @@
-from typing import Union, Tuple
+from typing import Union, Tuple, Dict
 import numpy as np
+import json
 import cv2 as cv
 from .process import cvtAnnotationsTXT2LST, cvtAnnotationsLST2TXT
 
-def readBBoxFile(file_path: str, tolist: bool=False) -> Union[str, Tuple[Tuple]]:
+def colorHex2RGB(hex_color: str) -> Tuple[int]:
+    if hex_color[0] == "#":
+        hex_color = hex_color[1:]
+
+    rgb = (hex_color[0:2], hex_color[2:4], hex_color[4:6])
+    rgb = tuple(map(lambda h: int(h, base=16), rgb))
+    
+    return rgb
+
+def readClassesFile(file_path, required_classes = ["Batsmen", "Ball", "Wicket"]) -> Dict[str, str]:
+    classes_raw = {}
+    with open(file_path) as handler:
+        classes_raw = json.load(handler)
+    
+    classes = []
+    for rc in required_classes:
+        cls = tuple(filter(lambda cls: cls["name"] == rc, classes_raw))[0]
+        cls = {"name":cls["name"], "color":np.array(colorHex2RGB(cls["color"]))}
+        classes.append(cls)
+
+    
+    return classes
+
+def readAnnotationsFile(file_path: str, tolist: bool=False) -> Union[str, Tuple[Tuple]]:
     txt_cntnt = ""
     with open(file_path) as handler:
         txt_cntnt = handler.read()
@@ -13,9 +37,9 @@ def readBBoxFile(file_path: str, tolist: bool=False) -> Union[str, Tuple[Tuple]]
     
     return output
 
-def saveBBoxFile(cntnt: Union[str, Tuple[Tuple]], file_path: str) -> None:
+def saveAnnotationsFile(cntnt: Union[str, Tuple[Tuple]], file_path: str, round_deci=6) -> None:
     if type(cntnt) != str:
-        cntnt = cvtAnnotationsLST2TXT(cntnt)
+        cntnt = cvtAnnotationsLST2TXT(cntnt, round_deci)
     with open(file_path, "w") as handler:
         handler.write(cntnt)
 
