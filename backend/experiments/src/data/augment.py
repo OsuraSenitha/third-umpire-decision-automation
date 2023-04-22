@@ -258,13 +258,21 @@ def create_dataset(
             if all(tuple(map(lambda num: f"({num})" not in img_name, delete_nums))):
 
                 obj_name = os.path.splitext(img_name)[0]
+                
+                new_img_count = augment_rounds
+                if any(tuple(map(lambda num: f"({num})" in img_name, emphasis_nums))):
+                    new_img_count = augment_rounds*emphasis_weight
 
                 src_img_path = f"{src_images_path}/{img_name}"
                 src_seg_path = f"{src_images_path}/{img_name}___fuse.png"
                 src_bbx_path = f"{src_bboxes_path}/{obj_name}.txt"
                 src_img = cv.imread(src_img_path)
                 src_seg = cv.imread(src_seg_path)
-                src_bbx = io.readBBoxFile(src_bbx_path, True)
+                src_bbx = io.readBBoxFile(src_bbx_path)
+                if src_bbx.strip() == "":
+                    pbar.update(new_img_count + 1)
+                    continue
+                src_bbx = cvtAnnotationsTXT2LST(src_bbx)
 
                 # copy the raw image itself first
                 dst_img_path = f"{dst_imgs_path}/{obj_name}-0.png"
@@ -274,10 +282,6 @@ def create_dataset(
                 shutil.copy(src_seg_path, dst_seg_path)
                 shutil.copy(src_bbx_path, dst_bbx_path)
                 pbar.update(1)
-                # raw_data_count + augment_rounds*(emphasis_count*emphasis_ratio + non_emphasis_count)
-                new_img_count = augment_rounds
-                if any(tuple(map(lambda num: f"({num})" in img_name, emphasis_nums))):
-                    new_img_count = augment_rounds*emphasis_weight
 
                 for i in range(1, new_img_count+1):
 
