@@ -92,9 +92,10 @@ def makeDarknetSegmentationLabel(seg, label_export_path, classes):
     lines = []
     for lbl, cls in enumerate(classes):
         color = cls["color"]
-        boundaries = getSegmentsFromPNG(seg, color[::-1])
+        boundaries = getSegmentsFromPNG(seg, color)
         pts = [(lbl, *bnd) for bnd in boundaries]
         lines.extend(pts)
+
     saveAnnotationsFile(lines, label_export_path, None)
 
 
