@@ -1,6 +1,6 @@
 from .visualize import drawRects
 from .process import cvtAnnotationsTXT2LST, cvtAnnotationsLST2TXT
-from .analyze import get_mask
+from .analyze import getMask
 from . import io
 from . import augment
 import numpy as np
@@ -191,7 +191,13 @@ def noise(img: np.ndarray, max_noise:float = 0.8)->np.ndarray:
 def rotate_hue(
         img:np.ndarray,
         seg:np.ndarray,
-        human_colors:Tuple[str] = ['#0018fd', '#b07a53', '#8fdfa9', '#e20959', '#c2fe6b']
+        human_colors:Tuple[str] = np.array([
+            [253,  24,   0],
+            [ 83, 122, 176],
+            [169, 223, 143],
+            [ 89,   9, 226],
+            [107, 254, 194]]
+        )
     ) -> np.ndarray:
     """
     Randomly shifts the hue of the humans in the image
@@ -204,7 +210,7 @@ def rotate_hue(
     hsv_new = cv.merge([hnew,s,v])
     shifted_img = cv.cvtColor(hsv_new, cv.COLOR_HSV2BGR)
 
-    mask = get_mask(seg, human_colors)
+    mask = getMask(seg, human_colors)
 
     adjusted_img = img.copy()
     adjusted_img[mask] = shifted_img[mask]

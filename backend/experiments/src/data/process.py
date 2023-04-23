@@ -1,14 +1,16 @@
 import numpy as np
-import cv2 as cv
-from .analyze import img2ColorMat
 import os
 import shutil
-import json
-from tqdm.auto import tqdm
-from typing import Tuple
-    
-def splitForObjectDetect(src_dataset_dir, train_weight, val_weight, dst_dataset_dir, subdirs = ["bboxes", "images", "segmentations"], subdir_exts=["txt", "png", "png"]):
-    
+
+
+def splitForObjectDetect(
+    src_dataset_dir,
+    train_weight,
+    val_weight,
+    dst_dataset_dir,
+    subdirs=["bboxes", "images", "segmentations"],
+    subdir_exts=["txt", "png", "png"],
+):
     splits = ["train", "val"]
 
     for subdir in subdirs:
@@ -25,7 +27,7 @@ def splitForObjectDetect(src_dataset_dir, train_weight, val_weight, dst_dataset_
     for i, obj_name in enumerate(obj_names):
         obj_name = os.path.splitext(obj_name)[0]
         dst_split = "val"
-        if (i%tot_weight)-train_weight < 0:
+        if (i % tot_weight) - train_weight < 0:
             dst_split = "train"
 
         for src_dir, dst_dir, ext in zip(src_dirs, dst_dirs, subdir_exts):
@@ -33,13 +35,46 @@ def splitForObjectDetect(src_dataset_dir, train_weight, val_weight, dst_dataset_
             dst_dir = f"{dst_dir}/{dst_split}"
             shutil.copy(src_path, dst_dir)
 
+
 def cvtAnnotationsTXT2LST(txt_cntnt):
-    lst = list(map(lambda line: [int(line.split()[0]), *list(map(float, line.split()[1:]))], txt_cntnt.strip().split("\n")))
+    lst = list(
+        map(
+            lambda line: [int(line.split()[0]), *list(map(float, line.split()[1:]))],
+            txt_cntnt.strip().split("\n"),
+        )
+    )
     return lst
+
 
 def cvtAnnotationsLST2TXT(lst_cntnt, round_deci):
     if round_deci:
-        strn = "\n".join(list(map(lambda box: " ".join([str(int(box[0])), *list(map(lambda num: str(np.round(num, round_deci)).ljust(8, "0"), box[1:]))]), lst_cntnt)))
+        strn = "\n".join(
+            list(
+                map(
+                    lambda box: " ".join(
+                        [
+                            str(int(box[0])),
+                            *list(
+                                map(
+                                    lambda num: str(np.round(num, round_deci)).ljust(
+                                        8, "0"
+                                    ),
+                                    box[1:],
+                                )
+                            ),
+                        ]
+                    ),
+                    lst_cntnt,
+                )
+            )
+        )
     else:
-        strn = "\n".join(list(map(lambda box: " ".join([str(int(box[0])), *list(map(str, box[1:]))]), lst_cntnt)))
-    return strn 
+        strn = "\n".join(
+            list(
+                map(
+                    lambda box: " ".join([str(int(box[0])), *list(map(str, box[1:]))]),
+                    lst_cntnt,
+                )
+            )
+        )
+    return strn
