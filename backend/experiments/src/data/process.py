@@ -3,7 +3,7 @@ import os
 import shutil
 
 
-def splitForObjectDetect(
+def splitDataset(
     src_dataset_dir,
     train_weight,
     val_weight,

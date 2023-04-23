@@ -5,7 +5,7 @@ from typing import Tuple
 from tqdm.auto import tqdm
 import json
 from .io import saveAnnotationsFile, readAnnotationsFile, readClassesFile
-from .process import getBoundingBoxesFromSegmentation, cvtAnnotationsTXT2LST
+from .process import splitDataset
 
 
 def getBoundingBoxesFromSegmentation(seg_img, labels):
@@ -99,45 +99,57 @@ def makeDarknetSegmentationLabel(seg, label_export_path, classes):
 
 
 def makeDarknetSegmentationDataset(
-    src_images_root,
-    src_segments_root,
-    src_bboxes_root,
-    src_class_names,
-    dst_class_names,
-    classes,
+    src_path,
+    context_classes,
+    dataset_classes,
     export_path,
     pad_ratio=0.25,
+    split_weights=None,
 ):
-    dst_classes = tuple(filter(lambda cls: cls["name"] in dst_class_names, classes))
-    images_root_len = len(src_images_root)
+    src_images_dir = f"{src_path}/images"
+    src_segmts_dir = f"{src_path}/segmentation-images"
+    src_class_path = f"{src_path}/classes/classes.json"
+
+    assert os.path.exists(src_images_dir)
+    assert os.path.exists(src_segmts_dir)
+    assert os.path.exists(src_class_path)
+
+    classes = readClassesFile(
+        src_class_path, required_classes=context_classes, format="bgr"
+    )
+    dataset_classes_obj = list(
+        filter(lambda cls: cls["name"] in dataset_classes, classes)
+    )
+
     dst_images_root = os.path.join(export_path, "images")
-    dst_segments_root = os.path.join(export_path, "segmentations")
+    dst_labels_root = os.path.join(export_path, "labels")
+    dst_segmts_root = os.path.join(export_path, "segmentations")
     created_count = 0
     obj_nm_pad = 6
 
     # count the number of files
     file_count = 0
-    for src_images_path, subdirs, img_lst in os.walk(src_images_root):
+    for src_images_dir, _, img_lst in os.walk(src_images_dir):
         file_count += len(img_lst)
 
+    print("---- Generatinig dataset ----")
     with tqdm(total=file_count) as pbar:
-        for src_images_path, subdirs, img_lst in os.walk(src_images_root):
+        for src_images_root, _, img_lst in os.walk(src_images_dir):
             if len(img_lst) > 0:
-                trail = src_images_path[images_root_len:].strip("/")
+                trail = src_images_root[len(src_images_dir) :].strip("/")
 
-                dst_segments_path = os.path.join(dst_segments_root, trail)
+                dst_segmts_path = os.path.join(dst_segmts_root, trail)
+                dst_labels_path = os.path.join(dst_labels_root, trail)
                 dst_images_path = os.path.join(dst_images_root, trail)
-                os.makedirs(dst_segments_path, exist_ok=True)
+                os.makedirs(dst_labels_path, exist_ok=True)
                 os.makedirs(dst_images_path, exist_ok=True)
+                os.makedirs(dst_segmts_path, exist_ok=True)
 
-                src_segments_path = os.path.join(src_segments_root, trail).rstrip("/")
-                src_bboxes_path = os.path.join(src_bboxes_root, trail).rstrip("/")
+                src_segmts_root = os.path.join(src_segmts_dir, trail).rstrip("/")
 
                 for img_nm in img_lst:
-                    obj_nm = os.path.splitext(img_nm)[0]
-
-                    img = cv.imread(f"{src_images_path}/{img_nm}")
-                    seg = cv.imread(f"{src_segments_path}/{img_nm}")
+                    img = cv.imread(f"{src_images_root}/{img_nm}")
+                    seg = cv.imread(f"{src_segmts_root}/{img_nm}")
 
                     if seg is None:
                         pbar.update(1)
@@ -146,15 +158,14 @@ def makeDarknetSegmentationDataset(
 
                     H, W, _ = img.shape
 
-                    bbx = readAnnotationsFile(f"{src_bboxes_path}/{obj_nm}.txt")
-                    if bbx.strip() == "":
+                    bbx = getBoundingBoxesFromSegmentation(seg, classes)
+                    if len(bbx) == 0:
                         pbar.update(1)
                         continue
-                    bbx = cvtAnnotationsTXT2LST(bbx)
 
                     for line in bbx:
                         cls, *box = line
-                        if src_class_names[cls] in dst_class_names:
+                        if context_classes[cls] in dataset_classes:
                             exp_obj_nm = str(created_count).rjust(obj_nm_pad, "0")
                             created_count += 1
 
@@ -171,18 +182,36 @@ def makeDarknetSegmentationDataset(
                             seg_trm = seg[y1:y2, x1:x2]
 
                             if max(seg_trm.shape[:2]) > 100:
-                                export_annotation_path = (
-                                    f"{dst_segments_path}/{exp_obj_nm}.txt"
+                                export_segmts_path = (
+                                    f"{dst_segmts_path}/{exp_obj_nm}.txt"
+                                )
+                                export_labels_path = (
+                                    f"{dst_labels_path}/{exp_obj_nm}.txt"
                                 )
                                 export_image_path = (
                                     f"{dst_images_path}/{exp_obj_nm}.png"
                                 )
                                 makeDarknetSegmentationLabel(
-                                    seg_trm, export_annotation_path, dst_classes
+                                    seg_trm, export_segmts_path, classes
+                                )
+                                makeDarknetSegmentationLabel(
+                                    seg_trm, export_labels_path, dataset_classes_obj
                                 )
                                 cv.imwrite(export_image_path, img_trm)
 
                     pbar.update(1)
+
+    if split_weights is not None:
+        train_weight, val_weight = split_weights
+        dst_path = f"{export_path}[splitted]"
+        splitDataset(
+            export_path,
+            train_weight,
+            val_weight,
+            dst_path,
+            subdirs=["images", "labels", "segmentations"],
+            subdir_exts=["png", "txt", "txt"],
+        )
 
 
 def segmentationDS2DetectionDS(
@@ -190,7 +219,7 @@ def segmentationDS2DetectionDS(
 ):
     bboxes_path = f"{data_path}/bboxes"
     classes_file_path = f"{data_path}/classes/classes.json"
-    classes = readClassesFile(classes_file_path, label_names)
+    classes = readClassesFile(classes_file_path, label_names, "bgr")
     segments = list(
         filter(lambda name: "__fuse" in name, os.listdir(f"{data_path}/images"))
     )
