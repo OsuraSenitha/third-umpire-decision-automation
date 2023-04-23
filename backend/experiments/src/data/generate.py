@@ -4,7 +4,8 @@ import os
 from typing import Tuple
 from tqdm.auto import tqdm
 import json
-from .io import saveAnnotationsFile, readAnnotationsFile
+from src.data.io import saveAnnotationsFile, readAnnotationsFile
+from src.data.process import getBoundingBoxesFromSegmentation, cvtAnnotationsTXT2LST
 
 def getBoundingBoxesFromSegmentation(seg_img, labels):
     annotations = []
@@ -27,36 +28,48 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
 
     return annotations
 
-def getSegmentsFromPNG(img, color, normalize=True, epsilon:float=1.3):
+def getSegmentsFromPNG(img, color, normalize=True, epsilon:float=1.3, threshold_area=100):
     H, W, _ = img.shape
 
     mask = ((img[:,:, 0] == color[0]) & (img[:,:, 1] == color[1]) & (img[:,:, 2] == color[2])).astype(np.uint8)
-    contours_raw, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-    print(contours[0].shape)
+    contours_raw, hierarchy_raw = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
     # reduce the number of points
-    contours = []
+    contours_reduced = []
     for i in range(len(contours_raw)):
         reduced_contour = cv.approxPolyDP(contours_raw[i], epsilon, closed=True)
-        contours.append(reduced_contour)
+        contours_reduced.append(reduced_contour)
 
-    if len(contours)>0:
-        no_parent = hierarchy[0][:,3] == -1
-        no_parent_ids = np.where(no_parent)[0]
-        contours = [contours[i].squeeze() for i in no_parent_ids]
+    if len(contours_reduced) > 0:
 
-        boundaries = []
-        for cnt in contours:
-            X, Y = cnt[:,0], cnt[:,1]
-            if normalize:
-                X = X/W
-                Y = Y/H
-            bnd = np.zeros(cnt.shape[0]*2)
-            bnd[0::2] = X
-            bnd[1::2] = Y
-            boundaries.append(bnd.tolist())
+        # filter the contours by area
+        contours, hierarchy = [], []
+        for cnt, hir in zip(contours_reduced, hierarchy_raw[0]):        
+            area = cv.contourArea(cnt)         
+            if area > threshold_area:
+                contours.append(cnt)
+                hierarchy.append(hir)
+        hierarchy = np.array(hierarchy)
 
-        return boundaries
-    
+        if len(contours)>0:
+            no_parent = hierarchy[:,3] == -1
+            no_parent_ids = np.where(no_parent)[0]
+            contours = [contours[i].squeeze() for i in no_parent_ids]
+
+            boundaries = []
+            for cnt in contours:
+                X, Y = cnt[:,0], cnt[:,1]
+
+                if normalize:
+                    X = X/W
+                    Y = Y/H
+                bnd = np.zeros(cnt.shape[0]*2)
+                bnd[0::2] = X
+                bnd[1::2] = Y
+                boundaries.append(bnd.tolist())
+
+            return boundaries
+        
     return []
 
 def makeDarknetSegmentationLabel(seg, label_export_path, classes):
@@ -100,15 +113,20 @@ def makeDarknetSegmentationDataset(
                 os.makedirs(dst_segments_path, exist_ok=True)
                 os.makedirs(dst_images_path, exist_ok=True)
 
-                src_segments_path = os.path.join(src_segments_root, trail)
-                src_bboxes_path = os.path.join(src_bboxes_root, trail)
+                src_segments_path = os.path.join(src_segments_root, trail).rstrip("/")
+                src_bboxes_path = os.path.join(src_bboxes_root, trail).rstrip("/")
 
                 for img_nm in img_lst:
                     obj_nm = os.path.splitext(img_nm)[0]
 
                     img = cv.imread(f"{src_images_path}/{img_nm}")
                     seg = cv.imread(f"{src_segments_path}/{img_nm}")
-                    assert (img is not None) and (seg is not None)
+
+                    if seg is None:
+                        pbar.update(1)
+                        continue
+                    assert img is not None
+
 
                     H, W, _ = img.shape
 
@@ -136,10 +154,11 @@ def makeDarknetSegmentationDataset(
                             img_trm = img[y1:y2, x1:x2]
                             seg_trm = seg[y1:y2, x1:x2]
 
-                            export_annotation_path = f"{dst_segments_path}/{exp_obj_nm}.txt"
-                            export_image_path = f"{dst_images_path}/{exp_obj_nm}.png"
-                            makeDarknetSegmentationLabel(seg_trm, export_annotation_path, dst_classes)
-                            cv.imwrite(export_image_path, img_trm)
+                            if max(seg_trm.shape[:2]) > 100:
+                              export_annotation_path = f"{dst_segments_path}/{exp_obj_nm}.txt"
+                              export_image_path = f"{dst_images_path}/{exp_obj_nm}.png"
+                              makeDarknetSegmentationLabel(seg_trm, export_annotation_path, dst_classes)
+                              cv.imwrite(export_image_path, img_trm)
                     
                     pbar.update(1)
 
