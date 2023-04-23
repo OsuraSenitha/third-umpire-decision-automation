@@ -13,7 +13,7 @@ def colorHex2RGB(hex_color: str) -> Tuple[int]:
     
     return rgb
 
-def readClassesFile(file_path, required_classes = ["Batsmen", "Ball", "Wicket"]) -> Dict[str, str]:
+def readClassesFile(file_path, required_classes = ["Batsmen", "Ball", "Wicket"], format="rgb") -> Dict[str, str]:
     classes_raw = {}
     with open(file_path) as handler:
         classes_raw = json.load(handler)
@@ -21,7 +21,10 @@ def readClassesFile(file_path, required_classes = ["Batsmen", "Ball", "Wicket"])
     classes = []
     for rc in required_classes:
         cls = tuple(filter(lambda cls: cls["name"] == rc, classes_raw))[0]
-        cls = {"name":cls["name"], "color":np.array(colorHex2RGB(cls["color"]))}
+        color = np.array(colorHex2RGB(cls["color"]))
+        if format == "bgr":
+            color = color[::-1]
+        cls = {"name":cls["name"], "color":color}
         classes.append(cls)
 
     

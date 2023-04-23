@@ -5,14 +5,34 @@ from typing import Tuple
 from tqdm.auto import tqdm
 import json
 from .io import saveAnnotationsFile, readAnnotationsFile
-from .process import getBoundingBoxesFromSegmentation
+
+def getBoundingBoxesFromSegmentation(seg_img, labels):
+    annotations = []
+    img_h, img_w, _ = seg_img.shape
+    for label_i, label in enumerate(labels):
+        color = label["color"]
+        mask = ((seg_img[:,:, 0] == color[0]) & (seg_img[:,:, 1] == color[1]) & (seg_img[:,:, 2] == color[2])).astype(np.uint8)
+        contours, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        if len(contours)>0:
+            no_parent = hierarchy[0][:,3] == -1
+            no_parent_ids = np.where(no_parent)[0]
+            contours_filtered = [contours[i] for i in no_parent_ids]
+            for cont in contours_filtered:
+                box = cv.boundingRect(cont)
+                x,y,w,h = box
+                x_c, y_c = (x+w/2)/img_w, (y+h/2)/img_h
+                w_c, h_c = w/img_w, h/img_h
+                annotations.append([label_i, x_c, y_c, w_c, h_c])
+
+    return annotations
 
 def getSegmentsFromPNG(img, color, normalize=True, epsilon:float=1.3):
     H, W, _ = img.shape
 
     mask = ((img[:,:, 0] == color[0]) & (img[:,:, 1] == color[1]) & (img[:,:, 2] == color[2])).astype(np.uint8)
     contours_raw, hierarchy = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
+    print(contours[0].shape)
     # reduce the number of points
     contours = []
     for i in range(len(contours_raw)):
@@ -92,7 +112,11 @@ def makeDarknetSegmentationDataset(
 
                     H, W, _ = img.shape
 
-                    bbx = readAnnotationsFile(f"{src_bboxes_path}/{obj_nm}.txt", True)
+                    bbx = readAnnotationsFile(f"{src_bboxes_path}/{obj_nm}.txt")
+                    if bbx.strip() == "":
+                        pbar.update(1)
+                        continue
+                    bbx = cvtAnnotationsTXT2LST(bbx)
 
                     for line in bbx:
                         cls, *box = line
