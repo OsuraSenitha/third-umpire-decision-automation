@@ -1,5 +1,5 @@
 from .visualize import drawRects
-from .process import cvtAnnotationsTXT2LST, cvtAnnotationsLST2TXT
+from .process import cvtAnnotationsTXT2LST, cvtAnnotationsLST2TXT, makeMaskFromSegments
 from .analyze import getMask
 from . import io
 from . import augment
@@ -22,7 +22,7 @@ def DSSC(
     img: np.ndarray,
     labels: Union[str, Tuple[Tuple]],
     label_type: str = "bbox",
-    min_dim: int = 400,
+    min_dim: int = 100,
     aspect_ratio_max: float = 1.5,
     visualize: bool = False,
 ) -> Union[
@@ -164,33 +164,38 @@ def horizontal_flip_defined(img: np.ndarray, flip: bool = True) -> np.ndarray:
 
 
 def horizontal_flip(
-    img: np.ndarray, boxes: Union[str, Tuple[Tuple]]
+    img: np.ndarray, lbls: Union[str, Tuple[Tuple]], label_type: str = "bbox"
 ) -> Tuple[np.ndarray, Union[str, Tuple[Tuple]], bool]:
     """
     Horizontally flips a given image and its annotations randomly
     """
+    assert label_type in ["bbox", "segment"]
     flip = bool(np.random.randint(0, 2))
     if flip:
         # flip the image horizontally
         flip_img = horizontal_flip_defined(img)
         # decode the annotations if they are strings
         return_string_annotations = False
-        if type(boxes) == str:
+        if type(lbls) == str:
             return_string_annotations = True
-            boxes = cvtAnnotationsTXT2LST(boxes)
+            lbls = cvtAnnotationsTXT2LST(lbls)
         # flip the annotations
-        flip_boxes = []
-        for box in boxes:
-            l, x, y, w, h = box
-            flip_box = (l, 1 - x, y, w, h)
-            flip_boxes.append(flip_box)
+        if label_type == "bbox":
+            lbls = np.array(lbls)
+            lbls[:, 1] = 1 - lbls[:, 1]
+            flip_lbls = lbls.tolist()
+        else:
+            lbls = np.array(lbls)
+            lbls[:, 1::2] = 1 - lbls[:, 1::2]
+            flip_lbls = lbls.tolist()
+
         # encode the boxes back to strings if they were given as strings
         if return_string_annotations:
-            flip_boxes = cvtAnnotationsLST2TXT(flip_boxes)
+            flip_lbls = cvtAnnotationsLST2TXT(flip_lbls)
 
-        return flip_img, flip_boxes, flip
+        return flip_img, flip_lbls, flip
     else:
-        return img, boxes, flip
+        return img, lbls, flip
 
 
 def blur(img: np.ndarray, apply_blur_thresh: int = 300) -> np.ndarray:
@@ -229,18 +234,20 @@ def brightness_contrast(
     return adjusted_img
 
 
-def noise(img: np.ndarray, max_noise: float = 0.8) -> np.ndarray:
+def noise(img: np.ndarray, max_noise: float = 0.8, noise_thresh_dim=400) -> np.ndarray:
     """
     Randomly adds gaussian noise to a given image randomly
     """
-    add_noise = np.random.randint(0, 2)
-    if add_noise:
-        noise_scale = np.clip(np.random.randn(1), 0, max_noise)
-        gauss_noise = (np.random.randn(*img.shape) * noise_scale).astype(np.uint8)
-        gn_img = cv.add(img, gauss_noise)
-        return gn_img
-    else:
-        return img
+    H, W, _ = img.shape
+    if max(H, W) > noise_thresh_dim:
+        add_noise = np.random.randint(0, 2)
+        if add_noise:
+            noise_scale = np.clip(np.random.randn(1), 0, max_noise)
+            gauss_noise = (np.random.randn(*img.shape) * noise_scale).astype(np.uint8)
+            gn_img = cv.add(img, gauss_noise)
+            return gn_img
+
+    return img
 
 
 def rotate_hue(
@@ -249,10 +256,13 @@ def rotate_hue(
     human_colors: Tuple[str] = np.array(
         [[253, 24, 0], [83, 122, 176], [169, 223, 143], [89, 9, 226], [107, 254, 194]]
     ),
+    label_type="bbox",
 ) -> np.ndarray:
     """
     Randomly shifts the hue of the humans in the image
     """
+    assert label_type in ["bbox", "segment"]
+
     # convert to HSV
     shift = np.random.uniform(-180, 180)
     hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
@@ -261,7 +271,10 @@ def rotate_hue(
     hsv_new = cv.merge([hnew, s, v])
     shifted_img = cv.cvtColor(hsv_new, cv.COLOR_HSV2BGR)
 
-    mask = getMask(seg, human_colors)
+    if label_type == "bbox":
+        mask = getMask(seg, human_colors)
+    else:
+        mask = makeMaskFromSegments(img.shape[:2], seg)
 
     adjusted_img = img.copy()
     adjusted_img[mask] = shifted_img[mask]

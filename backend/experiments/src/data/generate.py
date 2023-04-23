@@ -6,6 +6,7 @@ from tqdm.auto import tqdm
 import json
 from .io import saveAnnotationsFile, readAnnotationsFile, readClassesFile
 from .process import splitDataset
+import yaml
 
 
 def getBoundingBoxesFromSegmentation(seg_img, labels):
@@ -105,11 +106,13 @@ def makeDarknetSegmentationDataset(
     dataset_classes,
     export_path,
     pad_ratio=0.25,
+    ds_name: str = "dataset",
     split_weights=None,
 ):
     src_images_dir = f"{src_path}/images"
     src_segmts_dir = f"{src_path}/segmentation-images"
     src_class_path = f"{src_path}/classes/classes.json"
+    ds_file_path = f"{export_path}/{ds_name}.yaml"
 
     assert os.path.exists(src_images_dir)
     assert os.path.exists(src_segmts_dir)
@@ -121,6 +124,7 @@ def makeDarknetSegmentationDataset(
     dataset_classes_obj = list(
         filter(lambda cls: cls["name"] in dataset_classes, classes)
     )
+    ds_file_cntnt = {"nc": len(context_classes), "names": context_classes}
 
     dst_images_root = os.path.join(export_path, "images")
     dst_labels_root = os.path.join(export_path, "labels")
@@ -201,10 +205,19 @@ def makeDarknetSegmentationDataset(
                                 cv.imwrite(export_image_path, img_trm)
 
                     pbar.update(1)
+    with open(ds_file_path, "w") as handler:
+        yaml.dump(ds_file_cntnt, handler)
 
     if split_weights is not None:
         train_weight, val_weight = split_weights
         dst_path = f"{export_path}[splitted]"
+        ds_file_path = f"{dst_path}/{ds_name}.yaml"
+        ds_file_cntnt = {
+            "train": f"./datasets/{ds_name}/images/train",
+            "val": f"./datasets/{ds_name}/images/val",
+            "nc": len(context_classes),
+            "names": context_classes,
+        }
         splitDataset(
             export_path,
             train_weight,
@@ -213,6 +226,8 @@ def makeDarknetSegmentationDataset(
             subdirs=["images", "labels", "segmentations"],
             subdir_exts=["png", "txt", "txt"],
         )
+        with open(ds_file_path, "w") as handler:
+            yaml.dump(ds_file_cntnt, handler)
 
 
 def segmentationDS2DetectionDS(

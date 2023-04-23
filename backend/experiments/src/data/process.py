@@ -1,6 +1,8 @@
 import numpy as np
 import os
 import shutil
+import cv2 as cv
+from typing import Tuple, Union
 
 
 def splitDataset(
@@ -46,8 +48,8 @@ def cvtAnnotationsTXT2LST(txt_cntnt):
     return lst
 
 
-def cvtAnnotationsLST2TXT(lst_cntnt, round_deci):
-    if round_deci:
+def cvtAnnotationsLST2TXT(lst_cntnt, round_deci=None):
+    if round_deci is not None:
         strn = "\n".join(
             list(
                 map(
@@ -78,3 +80,21 @@ def cvtAnnotationsLST2TXT(lst_cntnt, round_deci):
             )
         )
     return strn
+
+
+def makeMaskFromSegments(shape: Tuple[int], segments: Union[str, Tuple]) -> np.ndarray:
+    if type(segments) == str:
+        segments = np.array(cvtAnnotationsTXT2LST(segments))
+    else:
+        segments = np.array(segments)
+    mask = np.zeros(shape)
+    H, W = shape
+    segments = segments[:, 1:]
+    segments[:, 0::2] *= W
+    segments[:, 1::2] *= H
+    n = segments.shape[0]
+    segments = segments.reshape((n, -1, 2)).astype(np.int64)
+    cv.fillPoly(mask, segments, 1)
+    mask = mask.astype(bool)
+
+    return mask
