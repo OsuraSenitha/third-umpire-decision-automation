@@ -3,6 +3,10 @@ import json
 from sagemaker.s3 import S3Downloader
 
 
+# TODO: process this downloaded data so that it will contain data in the format
+#           images: png files
+#           segmentations: txt files with the boundaries and class names
+#           description: a yaml file containing the class names in the labels order
 def download_cric_semantic(download_location: str, drive_mount_point: str) -> str:
     os.system("!pip install -q kaggle")
     # add kaggle credentials
@@ -78,13 +82,35 @@ def download_batsmen_segmentation(
     return config_path
 
 
+def download_wicket_classification(
+    download_location: str = "./datasets", augmented: bool = False
+) -> str:
+    tmp_path = "./tmp"
+    download_path = f"{download_location}/wicket-classification"
+    s3_uri = (
+        "s3://third-umpire-decision-automation-osura/datasets/wicket-classification.zip"
+    )
+    if augmented:
+        s3_uri = "s3://third-umpire-decision-automation-osura/datasets/augmented/wicket-classification.zip"
+    S3Downloader.download(s3_uri, tmp_path)
+    shutil.unpack_archive(f"{tmp_path}/wicket-classification.zip", download_path)
+    shutil.rmtree(tmp_path)
+
+    return download_path
+
+
 def download(
     dataset,
     download_location: str = "./datasets",
     drive_mount_point: str = "/content/drive",
     augmented: bool = False,
 ) -> str:
-    datasets = ["cricket-semantic", "cricket-object-detect", "batsmen-segmentation"]
+    datasets = [
+        "cricket-semantic",
+        "cricket-object-detect",
+        "batsmen-segmentation",
+        "wicket-classification",
+    ]
 
     if not os.path.exists(download_location):
         os.makedirs(download_location)
@@ -97,6 +123,9 @@ def download(
         return config_path
     elif dataset == datasets[2]:
         config_path = download_batsmen_segmentation(download_location, augmented)
+        return config_path
+    elif dataset == datasets[3]:
+        config_path = download_wicket_classification(download_location, augmented)
         return config_path
     else:
         raise ValueError(
