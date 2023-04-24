@@ -84,17 +84,18 @@ def cvtAnnotationsLST2TXT(lst_cntnt, round_deci=None):
 
 def makeMaskFromSegments(shape: Tuple[int], segments: Union[str, Tuple]) -> np.ndarray:
     if type(segments) == str:
-        segments = np.array(cvtAnnotationsTXT2LST(segments))
-    else:
-        segments = np.array(segments)
+        segments = cvtAnnotationsTXT2LST(segments)
     mask = np.zeros(shape)
     H, W = shape
-    segments = segments[:, 1:]
-    segments[:, 0::2] *= W
-    segments[:, 1::2] *= H
-    n = segments.shape[0]
-    segments = segments.reshape((n, -1, 2)).astype(np.int64)
-    cv.fillPoly(mask, segments, 1)
+    new_segments = []
+    for segment in segments:
+        segment = np.array(segment[1:])
+        segment[0::2] *= W
+        segment[1::2] *= H
+        segment = segment.reshape(-1, 2).astype(np.int64)
+        new_segments.append(segment)
+
+    cv.fillPoly(mask, new_segments, 1)
     mask = mask.astype(bool)
 
     return mask

@@ -59,18 +59,19 @@ def saveAnnotationsFile(
 def saveData(
     img: np.ndarray,
     seg: np.ndarray,
-    bbx: Union[str, Tuple[Tuple]],
+    lbl: Union[str, Tuple[Tuple]],
     ds_path: str,
     obj_name: str,
 ) -> None:
     dst_img_path = f"{ds_path}/images/{obj_name}.png"
-    dst_seg_path = f"{ds_path}/segmentations/{obj_name}.png"
-    dst_bbx_path = f"{ds_path}/bboxes/{obj_name}.txt"
+    dst_seg_path = f"{ds_path}/segmentations/{obj_name}.txt"
+    dst_lbl_path = f"{ds_path}/labels/{obj_name}.txt"
 
-    if type(bbx) != str:
-        bbx = cvtAnnotationsLST2TXT(bbx)
+    if type(lbl) != str:
+        lbl = cvtAnnotationsLST2TXT(lbl)
 
     cv.imwrite(dst_img_path, img)
-    cv.imwrite(dst_seg_path, seg)
-    with open(dst_bbx_path, "w") as handler:
-        handler.write(bbx)
+    with open(dst_lbl_path, "w") as handler:
+        handler.write(lbl)
+    with open(dst_seg_path, "w") as handler:
+        handler.write(seg)

@@ -185,9 +185,9 @@ def horizontal_flip(
             lbls[:, 1] = 1 - lbls[:, 1]
             flip_lbls = lbls.tolist()
         else:
-            lbls = np.array(lbls)
-            lbls[:, 1::2] = 1 - lbls[:, 1::2]
-            flip_lbls = lbls.tolist()
+            for lbl in lbls:
+                lbl[0::2] = list(map(lambda val: 1 - val, lbl[0::2]))
+            flip_lbls = lbls
 
         # encode the boxes back to strings if they were given as strings
         if return_string_annotations:
@@ -293,6 +293,9 @@ def create_dataset(
     images_dir = "images"
     segmts_dir = "segmentations"
     assert labels_dir in ["segmentations", "bboxes"]
+    label_type = "bbox"
+    if labels_dir == "segmentations":
+        label_type = "segment"
     subdirs = os.listdir(original_data_path)
     assert labels_dir in subdirs and images_dir in subdirs
 
@@ -332,8 +335,9 @@ def create_dataset(
 
     # Create the directories
     dst_imgs_path = f"{augment_data_path}/images"
-    dst_lbls_path = f"{augment_data_path}/{labels_dir}"
-    for dir in [dst_imgs_path, dst_lbls_path]:
+    dst_lbls_path = f"{augment_data_path}/labels"
+    dst_segs_path = f"{augment_data_path}/segmentations"
+    for dir in [dst_imgs_path, dst_lbls_path, dst_segs_path]:
         os.makedirs(dir, exist_ok=True)
 
     # Create new dataset
@@ -366,26 +370,27 @@ def create_dataset(
                 # copy the raw image itself first
                 dst_img_path = f"{dst_imgs_path}/{obj_nm}-0.png"
                 dst_lbl_path = f"{dst_lbls_path}/{obj_nm}-0.txt"
+                dst_seg_path = f"{dst_segs_path}/{obj_nm}-0.txt"
                 shutil.copy(src_img_path, dst_img_path)
                 shutil.copy(src_lbl_path, dst_lbl_path)
+                shutil.copy(src_lbl_path, dst_seg_path)  # TODO: Fix this
                 pbar.update(1)
 
                 for i in range(1, new_img_count + 1):
-                    dst_img, dst_bbx, crop_data = DSSC(src_img, seg)
-                    dst_seg = DSSC_defined(seg, crop_data)
-
-                    dst_img, dst_bbx, flipped = augment.horizontal_flip(
-                        dst_img, dst_bbx
+                    dst_img, dst_lbl, crop_data = DSSC(
+                        src_img, seg, label_type=label_type
                     )
-                    dst_seg = horizontal_flip_defined(dst_seg, flipped)
-
-                    dst_img = rotate_hue(dst_img, dst_seg)
+                    dst_img, dst_lbl, flipped = augment.horizontal_flip(
+                        dst_img, dst_lbl, label_type=label_type
+                    )
+                    dst_img = rotate_hue(dst_img, dst_lbl, label_type=label_type)
                     dst_img = brightness_contrast(dst_img)
                     dst_img = blur(dst_img)
                     dst_img = noise(dst_img)
 
+                    dst_lbl = cvtAnnotationsLST2TXT(dst_lbl)
                     io.saveData(
-                        dst_img, dst_seg, dst_bbx, augment_data_path, f"{obj_nm}-{i}"
+                        dst_img, dst_lbl, dst_lbl, augment_data_path, f"{obj_nm}-{i}"
                     )
 
                     pbar.update(1)
