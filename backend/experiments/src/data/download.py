@@ -30,13 +30,20 @@ def download_cric_semantic(download_location: str, drive_mount_point: str) -> st
     return final_dir
 
 
-def download_object_detect(download_location: str = "./datasets") -> str:
+def download_object_detect(
+    download_location: str = "./datasets", augmented: bool = False
+) -> str:
     temp_path = "./tmp"
     dataset_path = f"{download_location}/cricket-object-detect"
     config_path = "./cricket-object-detect.yaml"
 
+    s3_uri = (
+        "s3://third-umpire-decision-automation-osura/datasets/cricket-object-detect.zip"
+    )
+    if augmented:
+        s3_uri = "s3://third-umpire-decision-automation-osura/datasets/augmented/cricket-object-detect.zip"
     S3Downloader.download(
-        "s3://third-umpire-decision-automation-osura/datasets/cricket-object-detect.zip",
+        s3_uri,
         f"{temp_path}/cricket-object-detect",
     )
     shutil.unpack_archive(
@@ -48,13 +55,20 @@ def download_object_detect(download_location: str = "./datasets") -> str:
     return config_path
 
 
-def download_batsmen_segmentation(download_location: str = "./datasets") -> str:
+def download_batsmen_segmentation(
+    download_location: str = "./datasets", augmented: bool = False
+) -> str:
     tmp_path = "./tmp"
     dataset_path = f"{download_location}/batsmen-segmentation"
     config_path = "./batsmen-segmentation.yaml"
 
+    s3_uri = (
+        "s3://third-umpire-decision-automation-osura/datasets/batsmen-segmentation.zip"
+    )
+    if augmented:
+        s3_uri = "s3://third-umpire-decision-automation-osura/datasets/augmented/batsmen-segmentation.zip"
     S3Downloader.download(
-        "s3://third-umpire-decision-automation-osura/datasets/batsmen-segmentation.zip",
+        s3_uri,
         tmp_path,
     )
     shutil.unpack_archive(f"{tmp_path}/batsmen-segmentation.zip", dataset_path)
@@ -68,6 +82,7 @@ def download(
     dataset,
     download_location: str = "./datasets",
     drive_mount_point: str = "/content/drive",
+    augmented: bool = False,
 ) -> str:
     datasets = ["cricket-semantic", "cricket-object-detect", "batsmen-segmentation"]
 
@@ -78,10 +93,10 @@ def download(
         final_dir = download_cric_semantic(download_location, drive_mount_point)
         return final_dir
     elif dataset == datasets[1]:
-        config_path = download_object_detect(download_location)
+        config_path = download_object_detect(download_location, augmented)
         return config_path
     elif dataset == datasets[2]:
-        config_path = download_batsmen_segmentation(download_location)
+        config_path = download_batsmen_segmentation(download_location, augmented)
         return config_path
     else:
         raise ValueError(
