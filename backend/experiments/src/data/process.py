@@ -99,3 +99,39 @@ def makeMaskFromSegments(shape: Tuple[int], segments: Union[str, Tuple]) -> np.n
     mask = mask.astype(bool)
 
     return mask
+
+
+def extractFocusRegion(img, batsmen_segments, wicket_bbx_lst):
+    # output from the segmentation model (maped back to the image dimensios)
+    batsmen_possible_clearence = 0.5
+    H, W, _ = img.shape
+    xmax, xmin = 0, W
+    for seg in batsmen_segments:
+        seg_xmax = int(max(seg[1::2]) * W)
+        if seg_xmax > xmax:
+            xmax = seg_xmax
+        seg_xmin = int(min(seg[1::2]) * W)
+        if seg_xmin < xmin:
+            xmin = seg_xmin
+    left_trim = xmin + int((xmax - xmin) * batsmen_possible_clearence)
+
+    right_trim = W
+    for bbx in wicket_bbx_lst:
+        l, x, y, w, h = bbx
+        bbx_xmin = int(x * W - (w * W) / 2)
+        if bbx_xmin < right_trim:
+            right_trim = bbx_xmin
+
+    new_W = right_trim - left_trim
+    batsmen_segments_focused = []
+    for seg in batsmen_segments:
+        new_x = np.array(seg[1::2]) * W
+        new_x -= left_trim
+        new_x = new_x.clip(0) / new_W
+        new_seg = [*seg]
+        new_seg[1::2] = new_x.tolist()
+        batsmen_segments_focused.append(new_seg)
+
+    focus_region = img[:, left_trim:right_trim, :]
+
+    return focus_region, batsmen_segments_focused

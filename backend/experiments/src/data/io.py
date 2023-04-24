@@ -48,7 +48,7 @@ def readAnnotationsFile(
 
 
 def saveAnnotationsFile(
-    cntnt: Union[str, Tuple[Tuple]], file_path: str, round_deci=6
+    cntnt: Union[str, Tuple[Tuple]], file_path: str, round_deci=None
 ) -> None:
     if type(cntnt) != str:
         cntnt = cvtAnnotationsLST2TXT(cntnt, round_deci)

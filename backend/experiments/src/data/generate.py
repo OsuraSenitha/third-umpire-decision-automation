@@ -37,16 +37,16 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
     return annotations
 
 
-def getSegmentsFromPNG(
+def getSegmentsFromImg(
     img, color, normalize=True, epsilon: float = 1.3, threshold_area=100
 ):
-    H, W, _ = img.shape
+    H, W, c = img.shape
+    assert c == len(color)
 
-    mask = (
-        (img[:, :, 0] == color[0])
-        & (img[:, :, 1] == color[1])
-        & (img[:, :, 2] == color[2])
-    ).astype(np.uint8)
+    mask = np.zeros(img.shape).astype(bool)
+    for i in range(c):
+        mask[:, :, i] = img[:, :, i] == color[i]
+    mask = np.all(mask, axis=2).astype(np.uint8)
     contours_raw, hierarchy_raw = cv.findContours(
         mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE
     )
@@ -89,11 +89,22 @@ def getSegmentsFromPNG(
     return []
 
 
+def cvtSegmentsPngtoTxt(
+    img_path: str, txt_path: str, color: Tuple[int] = [0, 0, 0, 255], cls_id: int = 0
+) -> Tuple[Tuple]:
+    img = cv.imread(img_path, cv.IMREAD_UNCHANGED)
+    seg_lst = getSegmentsFromImg(img, color)
+    seg_lst = list(map(lambda line: [cls_id, *line], seg_lst))
+    saveAnnotationsFile(seg_lst, txt_path)
+
+    return seg_lst
+
+
 def makeDarknetSegmentationLabel(seg, label_export_path, classes):
     lines = []
     for lbl, cls in enumerate(classes):
         color = cls["color"]
-        boundaries = getSegmentsFromPNG(seg, color)
+        boundaries = getSegmentsFromImg(seg, color)
         pts = [(lbl, *bnd) for bnd in boundaries]
         lines.extend(pts)
 
