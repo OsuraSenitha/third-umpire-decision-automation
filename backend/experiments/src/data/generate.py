@@ -1,6 +1,6 @@
 import cv2 as cv
 import numpy as np
-import os
+import os, shutil
 from typing import Tuple
 from tqdm.auto import tqdm
 import json
@@ -241,36 +241,58 @@ def makeDarknetSegmentationDataset(
             yaml.dump(ds_file_cntnt, handler)
 
 
-def segmentationDS2DetectionDS(
-    data_path: str, label_names: Tuple[str] = ["Batsmen", "Ball", "Wicket"]
+def makeDetectionLabelsFromSegmentationLabels(
+    data_path: str, label_names: Tuple[str] = ["Batsmen", "Wicket"]
 ):
     bboxes_path = f"{data_path}/bboxes"
     classes_file_path = f"{data_path}/classes/classes.json"
+    segments_path = f"{data_path}/segmentation-images"
+
     classes = readClassesFile(classes_file_path, label_names, "bgr")
-    segments = list(
-        filter(lambda name: "__fuse" in name, os.listdir(f"{data_path}/images"))
-    )
-    if not os.path.exists(bboxes_path):
-        os.makedirs(bboxes_path)
+    segments = os.listdir(segments_path)
+    os.makedirs(bboxes_path)
 
     labels = list(filter(lambda cls: cls["name"] in label_names, classes))
+    print("---- Creating Bounding Boxes ----")
     with tqdm(total=len(segments)) as pbar:
-        for i, seg in enumerate(segments):
-            img = cv.imread(f"{data_path}/images/{seg}")
+        for i, seg_nm in enumerate(segments):
+            img = cv.imread(f"{segments_path}/{seg_nm}")
             boxes = getBoundingBoxesFromSegmentation(img, labels)
-            txt_cntnt = "\n".join(
-                list(
-                    map(
-                        lambda line: " ".join(
-                            list(map(lambda num: str(np.round(num, 6)), line))
-                        ),
-                        boxes,
-                    )
-                )
-            )
-            img_f_name = seg[:-11]
-            txt_f_name = os.path.splitext(img_f_name)[0] + ".txt"
-            with open(f"{bboxes_path}/{txt_f_name}", "w") as handler:
-                handler.write(txt_cntnt)
+            txt_f_name = os.path.splitext(seg_nm)[0] + ".txt"
+            bbx_save_path = f"{bboxes_path}/{txt_f_name}"
+            saveAnnotationsFile(boxes, bbx_save_path)
 
             pbar.update(1)
+
+
+def kaggleDS2NativeDS(src_data_path, dst_data_path):
+    src_img_dir = f"{src_data_path}/images"
+    src_cls_dir = f"{src_data_path}/classes"
+    dst_seg_dir = f"{dst_data_path}/segmentation-images"
+    dst_img_dir = f"{dst_data_path}/images"
+    dst_cls_dir = f"{dst_data_path}/classes"
+
+    # copy the images
+    os.makedirs(dst_img_dir)
+    src_img_names = list(filter(lambda nm: "___" not in nm, os.listdir(src_img_dir)))
+    for src_img_name in src_img_names:
+        src_img_path = f"{src_img_dir}/{src_img_name}"
+        dst_img_path = f"{dst_img_dir}/{src_img_name}"
+        shutil.copy(src_img_path, dst_img_path)
+
+    # copy the segmentations
+    os.makedirs(dst_seg_dir)
+    src_seg_names = list(filter(lambda nm: "___fuse" in nm, os.listdir(src_img_dir)))
+    for src_seg_name in src_seg_names:
+        dst_seg_name = src_seg_name[:-11]
+        src_seg_path = f"{src_img_dir}/{src_seg_name}"
+        dst_seg_path = f"{dst_seg_dir}/{dst_seg_name}"
+        shutil.copy(src_seg_path, dst_seg_path)
+
+    # copy the class json file
+    os.makedirs(dst_cls_dir)
+    src_cls_path = f"{src_cls_dir}/classes.json"
+    dst_cls_path = f"{dst_cls_dir}/classes.json"
+    shutil.copy(src_cls_path, dst_cls_path)
+
+    makeDetectionLabelsFromSegmentationLabels(dst_data_path)
