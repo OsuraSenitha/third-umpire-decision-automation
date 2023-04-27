@@ -15,7 +15,19 @@ def colorHex2RGB(hex_color: str) -> Tuple[int]:
     return rgb
 
 
-def readClassesFile(file_path, required_classes="all", format="rgb") -> Dict[str, str]:
+def readClassesFile(
+    file_path,
+    required_classes=[
+        "Bowler",
+        "Batsmen",
+        "Wicket Keeper",
+        "Umpire",
+        "Fielder",
+        "Ball",
+        "Wicket",
+    ],
+    format="bgr",
+) -> Dict[str, str]:
     classes_raw = {}
     with open(file_path) as handler:
         classes_raw = json.load(handler)

@@ -38,8 +38,11 @@ def getBoundingBoxesFromSegmentation(seg_img, labels):
 
 
 def getSegmentsFromImg(
-    img, color, normalize=True, epsilon: float = 1.3, threshold_area=100
+    img, color, normalize=True, epsilon: float = None, threshold_area=100
 ):
+    """
+    Typical epsilon value: 1.3
+    """
     H, W, c = img.shape
     assert c == len(color)
 
@@ -52,10 +55,13 @@ def getSegmentsFromImg(
     )
 
     # reduce the number of points
-    contours_reduced = []
-    for i in range(len(contours_raw)):
-        reduced_contour = cv.approxPolyDP(contours_raw[i], epsilon, closed=True)
-        contours_reduced.append(reduced_contour)
+    if epsilon is not None:
+        contours_reduced = []
+        for i in range(len(contours_raw)):
+            reduced_contour = cv.approxPolyDP(contours_raw[i], epsilon, closed=True)
+            contours_reduced.append(reduced_contour)
+    else:
+        contours_reduced = contours_raw
 
     if len(contours_reduced) > 0:
         # filter the contours by area
@@ -242,37 +248,60 @@ def makeDarknetSegmentationDataset(
 
 
 def makeDetectionLabelsFromSegmentationLabels(
-    data_path: str, label_names: Tuple[str] = ["Batsmen", "Wicket"]
+    data_path: str, label_names: Tuple[str] = None
 ):
     bboxes_path = f"{data_path}/bboxes"
     classes_file_path = f"{data_path}/classes/classes.json"
     segments_path = f"{data_path}/segmentation-images"
+    dataset_descriptor_path = f"{data_path}/object-detect.yaml"
 
     classes = readClassesFile(classes_file_path, label_names, "bgr")
+    if label_names == "all":
+        label_names = list(map(lambda cls: cls["name"], classes))
     segments = os.listdir(segments_path)
     os.makedirs(bboxes_path)
 
-    labels = list(filter(lambda cls: cls["name"] in label_names, classes))
     print("---- Creating Bounding Boxes ----")
     with tqdm(total=len(segments)) as pbar:
         for i, seg_nm in enumerate(segments):
             img = cv.imread(f"{segments_path}/{seg_nm}")
-            boxes = getBoundingBoxesFromSegmentation(img, labels)
+            boxes = getBoundingBoxesFromSegmentation(img, classes)
             txt_f_name = os.path.splitext(seg_nm)[0] + ".txt"
             bbx_save_path = f"{bboxes_path}/{txt_f_name}"
             saveAnnotationsFile(boxes, bbx_save_path)
 
             pbar.update(1)
 
+    yaml_content = {"nc": len(label_names), "names": label_names}
+    with open(dataset_descriptor_path, "w") as handler:
+        yaml.dump(yaml_content, handler)
+
 
 def kaggleDS2NativeDS(src_data_path, dst_data_path):
     src_img_dir = f"{src_data_path}/images"
     src_cls_dir = f"{src_data_path}/classes"
-    dst_seg_dir = f"{dst_data_path}/segmentation-images"
     dst_img_dir = f"{dst_data_path}/images"
     dst_cls_dir = f"{dst_data_path}/classes"
+    dst_bbx_dir = f"{dst_data_path}/bboxes"
+    dst_seg_img_dir = f"{dst_data_path}/segmentation-images"
+    dst_seg_txt_dir = f"{dst_data_path}/segmentations"
+    dataset_descriptor_path = f"{dst_data_path}/object-detect.yaml"
+
+    # copy the class json file
+    print("---- Copying class file ----")
+    os.makedirs(dst_cls_dir)
+    src_cls_path = f"{src_cls_dir}/classes.json"
+    dst_cls_path = f"{dst_cls_dir}/classes.json"
+    shutil.copy(src_cls_path, dst_cls_path)
+
+    classes = readClassesFile(dst_cls_path)
+    label_names = list(map(lambda cls: cls["name"], classes))
+    yaml_content = {"nc": len(label_names), "names": label_names}
+    with open(dataset_descriptor_path, "w") as handler:
+        yaml.dump(yaml_content, handler)
 
     # copy the images
+    print("---- Copying images ----")
     os.makedirs(dst_img_dir)
     src_img_names = list(filter(lambda nm: "___" not in nm, os.listdir(src_img_dir)))
     for src_img_name in src_img_names:
@@ -281,18 +310,39 @@ def kaggleDS2NativeDS(src_data_path, dst_data_path):
         shutil.copy(src_img_path, dst_img_path)
 
     # copy the segmentations
-    os.makedirs(dst_seg_dir)
-    src_seg_names = list(filter(lambda nm: "___fuse" in nm, os.listdir(src_img_dir)))
-    for src_seg_name in src_seg_names:
+    print("---- Copying segmentation images ----")
+    os.makedirs(dst_seg_img_dir)
+    src_seg_img_names = list(
+        filter(lambda nm: "___fuse" in nm, os.listdir(src_img_dir))
+    )
+    for src_seg_name in src_seg_img_names:
         dst_seg_name = src_seg_name[:-11]
         src_seg_path = f"{src_img_dir}/{src_seg_name}"
-        dst_seg_path = f"{dst_seg_dir}/{dst_seg_name}"
+        dst_seg_path = f"{dst_seg_img_dir}/{dst_seg_name}"
         shutil.copy(src_seg_path, dst_seg_path)
 
-    # copy the class json file
-    os.makedirs(dst_cls_dir)
-    src_cls_path = f"{src_cls_dir}/classes.json"
-    dst_cls_path = f"{dst_cls_dir}/classes.json"
-    shutil.copy(src_cls_path, dst_cls_path)
+    # make bounding boxes
+    os.makedirs(dst_bbx_dir)
+    print("---- Creating Bounding Boxes ----")
+    src_seg_img_names = os.listdir(dst_seg_img_dir)
+    with tqdm(total=len(src_seg_img_names)) as pbar:
+        for seg_nm in src_seg_img_names:
+            img = cv.imread(f"{dst_seg_img_dir}/{seg_nm}")
+            boxes = getBoundingBoxesFromSegmentation(img, classes)
+            txt_f_name = os.path.splitext(seg_nm)[0] + ".txt"
+            bbx_save_path = f"{dst_bbx_dir}/{txt_f_name}"
+            saveAnnotationsFile(boxes, bbx_save_path)
+            pbar.update(1)
+    # makeDetectionLabelsFromSegmentationLabels(dst_data_path, "all")
 
-    makeDetectionLabelsFromSegmentationLabels(dst_data_path)
+    # convert the segmentation images into txt format
+    os.makedirs(dst_seg_txt_dir)
+    print("---- Converting segmentation images to text format ----")
+    with tqdm(total=len(src_seg_img_names)) as pbar:
+        for seg_img_nm in src_seg_img_names:
+            seg_txt_nm = os.path.splitext(seg_img_nm)[0] + ".txt"
+            seg_img_path = f"{dst_seg_img_dir}/{seg_img_nm}"
+            seg_img = cv.imread(seg_img_path)
+            dst_seg_txt_path = f"{dst_seg_txt_dir}/{seg_txt_nm}"
+            makeDarknetSegmentationLabel(seg_img, dst_seg_txt_path, classes)
+            pbar.update(1)

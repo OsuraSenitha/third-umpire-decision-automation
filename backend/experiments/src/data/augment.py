@@ -11,17 +11,11 @@ import shutil
 from tqdm.auto import tqdm
 
 
-def DSSC_defined(img: np.ndarray, crop_data: Tuple) -> np.ndarray:
-    [xmin, xmax, ymin, ymax] = crop_data
-    cropped_img = img[ymin:ymax, xmin:xmax, :]
-
-    return cropped_img
-
-
 def DSSC(
     img: np.ndarray,
-    labels: Union[str, Tuple[Tuple]],
-    label_type: str = "bbox",
+    bboxes: Union[str, Tuple[Tuple]],
+    sgmnts: Union[str, Tuple[Tuple]],
+    interested_lbls: Tuple[int],
     min_dim: int = 100,
     aspect_ratio_max: float = 1.5,
     visualize: bool = False,
@@ -35,38 +29,26 @@ def DSSC(
         3. Cropping
     """
 
-    assert label_type in ["bbox", "segment"]
-
     return_string_annotations = False
-    if type(labels) == str:
+    if type(bboxes) == str:
         return_string_annotations = True
-        labels = cvtAnnotationsTXT2LST(labels)
+        bboxes = cvtAnnotationsTXT2LST(bboxes)
+        sgmnts = cvtAnnotationsTXT2LST(sgmnts)
     H, W, _ = img.shape
 
     # determine the possible extremes for cropping
     xmin, xmax, ymin, ymax = W, 0, H, 0
-    for label in labels:
-        if label_type == "bbox":
-            l, x, y, w, h = label
-            x_s, y_s, w_s, h_s = x * W, y * H, w * W, h * H
-            if xmax < x_s + w_s / 2:
-                xmax = int(x_s + w_s / 2)
-            if xmin > x_s - w_s / 2:
-                xmin = int(x_s - w_s / 2)
-            if ymax < y_s + h_s / 2:
-                ymax = int(y_s + h_s / 2)
-            if ymin > y_s - h_s / 2:
-                ymin = int(y_s - h_s / 2)
-        else:
-            l, *pts = label
+    for label in sgmnts:
+        l, *pts = label
+        if l in interested_lbls:
             X = np.array(pts[0::2])
             Y = np.array(pts[1::2])
             X = X * W
             Y = Y * H
-            xmin = X.min()
-            ymin = Y.min()
-            xmax = X.max()
-            ymax = Y.max()
+            xmin = min(X.min(), xmin)
+            ymin = min(Y.min(), ymin)
+            xmax = max(X.max(), xmax)
+            ymax = max(Y.max(), ymax)
 
     # randomly select values for croping while retaining the restrains
     xmin_crop_max = min(xmin, W - min_dim)
@@ -111,91 +93,95 @@ def DSSC(
     ymax_crop = min(H, ymax_crop)
     crop_data = [xmin_crop, xmax_crop, ymin_crop, ymax_crop]
 
-    new_labels = labels
+    new_bboxes = bboxes
+    new_sgmnts = sgmnts
     if not visualize:
-        new_labels = []
-        for label in labels:
-            if label_type == "bbox":
-                l, x, y, w, h = label
-                new_x = (x * W - xmin_crop) / crop_W
-                new_y = (y * H - ymin_crop) / crop_H
-                new_w = w * W / crop_W
-                new_h = h * H / crop_H
-                new_lbl = [l, new_x, new_y, new_w, new_h]
-            else:
-                l, *pts = label
-                X = np.array(pts[0::2])
-                Y = np.array(pts[1::2])
-                X = (X * W - xmin_crop) / crop_W
-                Y = (Y * H - ymin_crop) / crop_H
-                new_lbl = np.zeros(len(label))
-                new_lbl[0] = l
-                new_lbl[1::2] = X
-                new_lbl[2::2] = Y
-                new_lbl = new_lbl.tolist()
-            new_labels.append(new_lbl)
+        new_bboxes = []
+        for label in bboxes:
+            l, x, y, w, h = label
+            new_x = (x * W - xmin_crop) / crop_W
+            new_y = (y * H - ymin_crop) / crop_H
+            new_w = w * W / crop_W
+            new_h = h * H / crop_H
+            new_lbl = [l, new_x, new_y, new_w, new_h]
+            new_bboxes.append(new_lbl)
+        new_sgmnts = []
+        for label in sgmnts:
+            l, *pts = label
+            X = np.array(pts[0::2])
+            Y = np.array(pts[1::2])
+            X = (X * W - xmin_crop) / crop_W
+            Y = (Y * H - ymin_crop) / crop_H
+            n = X.size
+            min_val = np.zeros(n)
+            max_val = np.ones(n)
+            X = np.min([X, max_val], axis=0)
+            X = np.max([X, min_val], axis=0)
+            Y = np.min([Y, max_val], axis=0)
+            Y = np.max([Y, min_val], axis=0)
 
+            new_lbl = np.zeros(len(label))
+            new_lbl[0] = l
+            new_lbl[1::2] = X
+            new_lbl[2::2] = Y
+            new_lbl = new_lbl.tolist()
+            new_sgmnts.append(new_lbl)
+
+        cropped_img = img[ymin_crop:ymax_crop, xmin_crop:xmax_crop, :]
         if return_string_annotations:
-            new_labels = cvtAnnotationsLST2TXT(new_labels)
+            new_bboxes = cvtAnnotationsLST2TXT(new_bboxes)
+            new_sgmnts = cvtAnnotationsLST2TXT(new_sgmnts)
 
-        cropped_img = DSSC_defined(img, crop_data)
-        return cropped_img, new_labels, crop_data
+        return cropped_img, new_bboxes, new_sgmnts, crop_data
     else:
-        if label_type == "bbox":
-            drawn_img = drawRects(img, [[l, xmin, ymin, xmax, ymax]], False, True)
-            drawn_img = drawRects(
-                drawn_img,
-                [[l, xmin_crop, ymin_crop, xmax_crop, ymax_crop]],
-                False,
-                True,
-                (255, 0, 0),
-            )
-            if return_string_annotations:
-                new_labels = cvtAnnotationsLST2TXT(new_labels)
-            return drawn_img, new_labels, crop_data
+        drawn_img = drawRects(img, [[l, xmin, ymin, xmax, ymax]], False, True)
+        drawn_img = drawRects(
+            drawn_img,
+            [[l, xmin_crop, ymin_crop, xmax_crop, ymax_crop]],
+            False,
+            True,
+            (255, 0, 0),
+        )
+        if return_string_annotations:
+            new_bboxes = cvtAnnotationsLST2TXT(new_bboxes)
+            new_sgmnts = cvtAnnotationsLST2TXT(new_sgmnts)
 
-
-def horizontal_flip_defined(img: np.ndarray, flip: bool = True) -> np.ndarray:
-    if flip:
-        flip_img = img[:, ::-1, :]
-        return flip_img
-    else:
-        return img
+        return drawn_img, new_bboxes, new_sgmnts, crop_data
 
 
 def horizontal_flip(
-    img: np.ndarray, lbls: Union[str, Tuple[Tuple]], label_type: str = "bbox"
+    img: np.ndarray, bbx: Union[str, Tuple[Tuple]], seg: Union[str, Tuple[Tuple]]
 ) -> Tuple[np.ndarray, Union[str, Tuple[Tuple]], bool]:
     """
     Horizontally flips a given image and its annotations randomly
     """
-    assert label_type in ["bbox", "segment"]
     flip = bool(np.random.randint(0, 2))
     if flip:
         # flip the image horizontally
-        flip_img = horizontal_flip_defined(img)
+        flip_img = img[:, ::-1, :]
         # decode the annotations if they are strings
         return_string_annotations = False
-        if type(lbls) == str:
+        if type(bbx) == str:
             return_string_annotations = True
-            lbls = cvtAnnotationsTXT2LST(lbls)
+            bbx = cvtAnnotationsTXT2LST(bbx)
+            seg = cvtAnnotationsTXT2LST(seg)
         # flip the annotations
-        if label_type == "bbox":
-            lbls = np.array(lbls)
-            lbls[:, 1] = 1 - lbls[:, 1]
-            flip_lbls = lbls.tolist()
-        else:
-            for lbl in lbls:
-                lbl[0::2] = list(map(lambda val: 1 - val, lbl[0::2]))
-            flip_lbls = lbls
+        bbx = np.array(bbx)
+        bbx[:, 1] = 1 - bbx[:, 1]
+        flip_bbxs = bbx.tolist()
+
+        for lbl in seg:
+            lbl[1::2] = list(map(lambda val: 1 - val, lbl[1::2]))
+        flip_segs = seg
 
         # encode the boxes back to strings if they were given as strings
         if return_string_annotations:
-            flip_lbls = cvtAnnotationsLST2TXT(flip_lbls)
+            flip_bbxs = cvtAnnotationsLST2TXT(flip_bbxs)
+            flip_segs = cvtAnnotationsLST2TXT(flip_segs)
 
-        return flip_img, flip_lbls, flip
+        return flip_img, flip_bbxs, flip_segs
     else:
-        return img, lbls, flip
+        return img, bbx, seg
 
 
 def blur(img: np.ndarray, apply_blur_thresh: int = 300) -> np.ndarray:
@@ -252,16 +238,11 @@ def noise(img: np.ndarray, max_noise: float = 0.8, noise_thresh_dim=400) -> np.n
 
 def rotate_hue(
     img: np.ndarray,
-    seg: np.ndarray,
-    human_colors: Tuple[str] = np.array(
-        [[253, 24, 0], [83, 122, 176], [169, 223, 143], [89, 9, 226], [107, 254, 194]]
-    ),
-    label_type="bbox",
+    human_seg: np.ndarray,
 ) -> np.ndarray:
     """
     Randomly shifts the hue of the humans in the image
     """
-    assert label_type in ["bbox", "segment"]
 
     # convert to HSV
     shift = np.random.uniform(-180, 180)
@@ -271,10 +252,7 @@ def rotate_hue(
     hsv_new = cv.merge([hnew, s, v])
     shifted_img = cv.cvtColor(hsv_new, cv.COLOR_HSV2BGR)
 
-    if label_type == "bbox":
-        mask = getMask(seg, human_colors)
-    else:
-        mask = makeMaskFromSegments(img.shape[:2], seg)
+    mask = makeMaskFromSegments(img.shape[:2], human_seg)
 
     adjusted_img = img.copy()
     adjusted_img[mask] = shifted_img[mask]

@@ -1,12 +1,9 @@
 import os, shutil
 import json
 from sagemaker.s3 import S3Downloader
+from .generate import kaggleDS2NativeDS
 
 
-# TODO: process this downloaded data so that it will contain data in the format
-#           images: png files
-#           segmentations: txt files with the boundaries and class names
-#           description: a yaml file containing the class names in the labels order
 def download_cric_semantic(download_location: str, drive_mount_point: str) -> str:
     os.system("!pip install -q kaggle")
     # add kaggle credentials
@@ -23,12 +20,16 @@ def download_cric_semantic(download_location: str, drive_mount_point: str) -> st
         f"unzip {download_location}/cricket-semantic-segmentation.zip -d {download_location}"
     )
     os.system(f"rm -r -f {final_dir}")
-    os.system(
-        f'mv "{download_location}/www.acmeai.tech ODataset 4 - Cricket Semantic Segmentation" {final_dir}'
-    )
     os.system(f"rm -r -f {download_location}/cricket-semantic-segmentation.zip")
     os.system(
         f'rm -f "{download_location}/www.acmeai.tech ODataset 4 - Cricket Semantic Segmentation.pdf"'
+    )
+    kaggleDS2NativeDS(
+        f"{download_location}/www.acmeai.tech ODataset 4 - Cricket Semantic Segmentation",
+        final_dir,
+    )
+    os.system(
+        f'rm -r "{download_location}/www.acmeai.tech ODataset 4 - Cricket Semantic Segmentation"'
     )
 
     return final_dir
