@@ -15,7 +15,7 @@ def DSSC(
     img: np.ndarray,
     bboxes: Union[str, Tuple[Tuple]],
     sgmnts: Union[str, Tuple[Tuple]],
-    interested_lbls: Tuple[int],
+    interested_seg_lbls: Tuple[int],
     min_dim: int = 100,
     aspect_ratio_max: float = 1.5,
     visualize: bool = False,
@@ -40,7 +40,7 @@ def DSSC(
     xmin, xmax, ymin, ymax = W, 0, H, 0
     for label in sgmnts:
         l, *pts = label
-        if l in interested_lbls:
+        if l in interested_seg_lbls:
             X = np.array(pts[0::2])
             Y = np.array(pts[1::2])
             X = X * W
@@ -220,7 +220,9 @@ def brightness_contrast(
     return adjusted_img
 
 
-def noise(img: np.ndarray, max_noise: float = 0.8, noise_thresh_dim=400) -> np.ndarray:
+def noise(
+    img: np.ndarray, max_noise_scale: float = 10, noise_thresh_dim=400
+) -> np.ndarray:
     """
     Randomly adds gaussian noise to a given image randomly
     """
@@ -228,9 +230,15 @@ def noise(img: np.ndarray, max_noise: float = 0.8, noise_thresh_dim=400) -> np.n
     if max(H, W) > noise_thresh_dim:
         add_noise = np.random.randint(0, 2)
         if add_noise:
-            noise_scale = np.clip(np.random.randn(1), 0, max_noise)
-            gauss_noise = (np.random.randn(*img.shape) * noise_scale).astype(np.uint8)
-            gn_img = cv.add(img, gauss_noise)
+            max_noise = max_noise_scale / min(H, W) * 1080
+            hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV).astype(np.float32)
+            noise_scale = np.random.uniform(max_noise)
+            gauss_noise = np.clip(
+                np.random.randn(*img.shape[:-1]) * noise_scale, -max_noise, max_noise
+            ).astype(np.float32)
+            hsv[:, :, 2] = cv.add(hsv[:, :, 2], gauss_noise)
+            hsv = hsv.astype(np.uint8)
+            gn_img = cv.cvtColor(hsv, cv.COLOR_HSV2BGR)
             return gn_img
 
     return img
@@ -263,31 +271,30 @@ def rotate_hue(
 def create_dataset(
     original_data_path: str,
     augment_data_path: str,
-    emphasis_names: Tuple[str],
+    emphasis_img_names: Tuple[str],
     augment_rounds: int,
     emphasis_weight: int,
-    labels_dir="segmentations",
+    interested_seg_lbls: Tuple[int],
+    human_nms: Tuple[str] = ["Bowler", "Batsmen", "Wicket Keeper", "Umpire", "Fielder"],
 ) -> None:
-    images_dir = "images"
-    segmts_dir = "segmentations"
-    assert labels_dir in ["segmentations", "bboxes"]
-    label_type = "bbox"
-    if labels_dir == "segmentations":
-        label_type = "segment"
-    subdirs = os.listdir(original_data_path)
-    assert labels_dir in subdirs and images_dir in subdirs
+    images_subdir = "images"
+    bboxes_subdir = "bboxes"
+    segmts_subdir = "segments"
 
-    src_images_path = f"{original_data_path}/{images_dir}"
-    src_segmts_path = f"{original_data_path}/{segmts_dir}"
-    src_labels_path = f"{original_data_path}/{labels_dir}"
+    src_images_dir = f"{original_data_path}/{images_subdir}"
+    src_bboxes_dir = f"{original_data_path}/{bboxes_subdir}"
+    src_segmts_dir = f"{original_data_path}/{segmts_subdir}"
+
+    src_bbx_config_path = f"{original_data_path}/bboxes.yaml"
+    src_seg_config_path = f"{original_data_path}/segments.yaml"
+    dst_bbx_config_path = f"{augment_data_path}/bboxes.yaml"
+    dst_seg_config_path = f"{augment_data_path}/segments.yaml"
 
     # count the number of images
-    total_raw_data_count = 0
-    for images_root, _, img_nm_lst in os.walk(src_images_path):
-        total_raw_data_count += len(img_nm_lst)
+    total_raw_data_count = len(os.listdir(src_images_dir))
 
     # calculate the expected data counts
-    emphasis_count = len(emphasis_names)
+    emphasis_count = len(emphasis_img_names)
     non_emphasis_count = total_raw_data_count - emphasis_count
     final_data_count = total_raw_data_count + augment_rounds * (
         emphasis_count * emphasis_weight + non_emphasis_count
@@ -297,78 +304,80 @@ def create_dataset(
     # validate the completeness of the raw dataset
     print("---- Validating Raw Data ----")
     with tqdm(total=total_raw_data_count) as pbar:
-        for images_root, _, img_nm_lst in os.walk(src_images_path):
-            if len(img_nm_lst) > 0:
-                trail = images_root[len(src_images_path) :]
-                labels_root = f"{src_labels_path}/{trail}"
-                segmts_root = f"{src_segmts_path}/{trail}"
-                for img_nm in img_nm_lst:
-                    obj_nm = os.path.splitext(img_nm)[0]
-                    lbl_nm = f"{obj_nm}.txt"
-                    seg_path = f"{segmts_root}/{lbl_nm}"
-                    src_lbl_path = f"{labels_root}/{lbl_nm}"
-                    assert os.path.exists(src_lbl_path)
-                    assert os.path.exists(seg_path)
-                    pbar.update(1)
+        for img_nm in os.listdir(src_images_dir):
+            obj_nm = os.path.splitext(img_nm)[0]
+            lbl_nm = f"{obj_nm}.txt"
+            bbx_path = f"{src_bboxes_dir}/{lbl_nm}"
+            seg_path = f"{src_segmts_dir}/{lbl_nm}"
+            assert os.path.exists(bbx_path)
+            assert os.path.exists(seg_path)
+            pbar.update(1)
 
     # Create the directories
-    dst_imgs_path = f"{augment_data_path}/images"
-    dst_lbls_path = f"{augment_data_path}/labels"
-    dst_segs_path = f"{augment_data_path}/segmentations"
-    for dir in [dst_imgs_path, dst_lbls_path, dst_segs_path]:
+    dst_imgs_dir = f"{augment_data_path}/{images_subdir}"
+    dst_bbxs_dir = f"{augment_data_path}/{bboxes_subdir}"
+    dst_segs_dir = f"{augment_data_path}/{segmts_subdir}"
+    for dir in [dst_imgs_dir, dst_bbxs_dir, dst_segs_dir]:
         os.makedirs(dir, exist_ok=True)
+
+    # copy config files
+    shutil.copy(src_bbx_config_path, dst_bbx_config_path)
+    shutil.copy(src_seg_config_path, dst_seg_config_path)
 
     # Create new dataset
     print("---- Creating New Data ----")
-    with tqdm(total=total_raw_data_count) as pbar:
-        for images_root, _, img_nm_lst in os.walk(src_images_path):
-            trail = images_root[len(src_images_path) :]
-            labels_root = f"{src_labels_path}/{trail}"
-            segmts_root = f"{src_segmts_path}/{trail}"
+    seg_config = io.readDatasetConfig(src_seg_config_path)
+    seg_class_names = seg_config["names"]
+    human_seg_lbls = [seg_class_names.index(nm) for nm in human_nms]
+    with tqdm(total=final_data_count) as pbar:
+        for img_nm in os.listdir(src_images_dir):
+            obj_nm = os.path.splitext(img_nm)[0]
+            lbl_nm = obj_nm + ".txt"
 
-            for img_nm in img_nm_lst:
-                obj_nm = os.path.splitext(img_nm)[0]
+            new_img_count = augment_rounds
+            if img_nm in emphasis_img_names:
+                new_img_count = augment_rounds * emphasis_weight
 
-                new_img_count = augment_rounds
-                if img_nm in emphasis_names:
-                    new_img_count = augment_rounds * emphasis_weight
+            src_img_path = f"{src_images_dir}/{img_nm}"
+            src_bbx_path = f"{src_bboxes_dir}/{lbl_nm}"
+            src_seg_path = f"{src_segmts_dir}/{lbl_nm}"
+            src_img = cv.imread(src_img_path)
+            src_bbx = io.readAnnotationsFile(src_bbx_path)
+            src_seg = io.readAnnotationsFile(src_seg_path)
+            if src_bbx.strip() == "":
+                pbar.update(new_img_count + 1)
+                continue
+            src_bbx = cvtAnnotationsTXT2LST(src_bbx)
+            src_seg = cvtAnnotationsTXT2LST(src_seg)
 
-                src_img_path = f"{images_root}/{img_nm}"
-                src_lbl_path = f"{labels_root}/{obj_nm}.txt"
-                seg_path = f"{segmts_root}/{obj_nm}.txt"
-                src_img = cv.imread(src_img_path)
-                src_lbl = io.readAnnotationsFile(src_lbl_path)
-                seg = io.readAnnotationsFile(seg_path)
-                if src_lbl.strip() == "":
-                    pbar.update(new_img_count + 1)
-                    continue
-                src_lbl = cvtAnnotationsTXT2LST(src_lbl)
-                seg = cvtAnnotationsTXT2LST(seg)
+            # copy the raw image itself first
+            dst_img_path = f"{dst_imgs_dir}/{obj_nm}-0.png"
+            dst_bbx_path = f"{dst_bbxs_dir}/{obj_nm}-0.txt"
+            dst_seg_path = f"{dst_segs_dir}/{obj_nm}-0.txt"
+            shutil.copy(src_img_path, dst_img_path)
+            shutil.copy(src_bbx_path, dst_bbx_path)
+            shutil.copy(src_seg_path, dst_seg_path)
+            pbar.update(1)
 
-                # copy the raw image itself first
-                dst_img_path = f"{dst_imgs_path}/{obj_nm}-0.png"
-                dst_lbl_path = f"{dst_lbls_path}/{obj_nm}-0.txt"
-                dst_seg_path = f"{dst_segs_path}/{obj_nm}-0.txt"
-                shutil.copy(src_img_path, dst_img_path)
-                shutil.copy(src_lbl_path, dst_lbl_path)
-                shutil.copy(src_lbl_path, dst_seg_path)  # TODO: Fix this
+            for i in range(1, new_img_count + 1):
+                dst_img, dst_bbx, dst_seg, _ = augment.DSSC(
+                    src_img, src_bbx, src_seg, interested_seg_lbls
+                )
+                dst_img, dst_bbx, dst_seg = augment.horizontal_flip(
+                    dst_img, dst_bbx, dst_seg
+                )
+                human_segs = list(
+                    filter(lambda seg_line: seg_line[0] in human_seg_lbls, dst_seg)
+                )
+                dst_img = augment.rotate_hue(dst_img, human_segs)
+                dst_img = brightness_contrast(dst_img)
+                dst_img = blur(dst_img)
+                dst_img = noise(dst_img)
+
+                dst_bbx = cvtAnnotationsLST2TXT(dst_bbx)
+                dst_seg = cvtAnnotationsLST2TXT(dst_seg)
+                io.saveData(
+                    dst_img, dst_bbx, dst_seg, augment_data_path, f"{obj_nm}-{i}"
+                )
+
                 pbar.update(1)
-
-                for i in range(1, new_img_count + 1):
-                    dst_img, dst_lbl, crop_data = DSSC(
-                        src_img, seg, label_type=label_type
-                    )
-                    dst_img, dst_lbl, flipped = augment.horizontal_flip(
-                        dst_img, dst_lbl, label_type=label_type
-                    )
-                    dst_img = rotate_hue(dst_img, dst_lbl, label_type=label_type)
-                    dst_img = brightness_contrast(dst_img)
-                    dst_img = blur(dst_img)
-                    dst_img = noise(dst_img)
-
-                    dst_lbl = cvtAnnotationsLST2TXT(dst_lbl)
-                    io.saveData(
-                        dst_img, dst_lbl, dst_lbl, augment_data_path, f"{obj_nm}-{i}"
-                    )
-
-                    pbar.update(1)

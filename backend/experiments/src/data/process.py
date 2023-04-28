@@ -39,13 +39,19 @@ def splitDataset(
 
 
 def cvtAnnotationsTXT2LST(txt_cntnt):
-    lst = list(
-        map(
-            lambda line: [int(line.split()[0]), *list(map(float, line.split()[1:]))],
-            txt_cntnt.strip().split("\n"),
+    if txt_cntnt.strip() != "":
+        lst = list(
+            map(
+                lambda line: [
+                    int(line.split()[0]),
+                    *list(map(float, line.split()[1:])),
+                ],
+                txt_cntnt.strip().split("\n"),
+            )
         )
-    )
-    return lst
+        return lst
+    else:
+        return []
 
 
 def cvtAnnotationsLST2TXT(lst_cntnt, round_deci=None):

@@ -4,7 +4,13 @@ import os, shutil
 from typing import Tuple
 from tqdm.auto import tqdm
 import json
-from .io import saveAnnotationsFile, readAnnotationsFile, readClassesFile
+from .io import (
+    saveAnnotationsFile,
+    readAnnotationsFile,
+    readClassesFile,
+    readDatasetConfig,
+    saveDatasetConfig,
+)
 from .process import splitDataset
 import yaml
 
@@ -278,14 +284,16 @@ def makeDetectionLabelsFromSegmentationLabels(
 
 
 def kaggleDS2NativeDS(src_data_path, dst_data_path):
+    unwanted_nums = ["(236)", "(328)"]
     src_img_dir = f"{src_data_path}/images"
     src_cls_dir = f"{src_data_path}/classes"
     dst_img_dir = f"{dst_data_path}/images"
     dst_cls_dir = f"{dst_data_path}/classes"
     dst_bbx_dir = f"{dst_data_path}/bboxes"
     dst_seg_img_dir = f"{dst_data_path}/segmentation-images"
-    dst_seg_txt_dir = f"{dst_data_path}/segmentations"
-    dataset_descriptor_path = f"{dst_data_path}/object-detect.yaml"
+    dst_seg_txt_dir = f"{dst_data_path}/segments"
+    detect_dataset_descriptor_path = f"{dst_data_path}/bboxes.yaml"
+    segmnt_dataset_descriptor_path = f"{dst_data_path}/segments.yaml"
 
     # copy the class json file
     print("---- Copying class file ----")
@@ -297,7 +305,9 @@ def kaggleDS2NativeDS(src_data_path, dst_data_path):
     classes = readClassesFile(dst_cls_path)
     label_names = list(map(lambda cls: cls["name"], classes))
     yaml_content = {"nc": len(label_names), "names": label_names}
-    with open(dataset_descriptor_path, "w") as handler:
+    with open(detect_dataset_descriptor_path, "w") as handler:
+        yaml.dump(yaml_content, handler)
+    with open(segmnt_dataset_descriptor_path, "w") as handler:
         yaml.dump(yaml_content, handler)
 
     # copy the images
@@ -305,9 +315,10 @@ def kaggleDS2NativeDS(src_data_path, dst_data_path):
     os.makedirs(dst_img_dir)
     src_img_names = list(filter(lambda nm: "___" not in nm, os.listdir(src_img_dir)))
     for src_img_name in src_img_names:
-        src_img_path = f"{src_img_dir}/{src_img_name}"
-        dst_img_path = f"{dst_img_dir}/{src_img_name}"
-        shutil.copy(src_img_path, dst_img_path)
+        if all([num not in src_img_name for num in unwanted_nums]):
+            src_img_path = f"{src_img_dir}/{src_img_name}"
+            dst_img_path = f"{dst_img_dir}/{src_img_name}"
+            shutil.copy(src_img_path, dst_img_path)
 
     # copy the segmentations
     print("---- Copying segmentation images ----")
@@ -316,10 +327,11 @@ def kaggleDS2NativeDS(src_data_path, dst_data_path):
         filter(lambda nm: "___fuse" in nm, os.listdir(src_img_dir))
     )
     for src_seg_name in src_seg_img_names:
-        dst_seg_name = src_seg_name[:-11]
-        src_seg_path = f"{src_img_dir}/{src_seg_name}"
-        dst_seg_path = f"{dst_seg_img_dir}/{dst_seg_name}"
-        shutil.copy(src_seg_path, dst_seg_path)
+        if all([num not in src_seg_name for num in unwanted_nums]):
+            dst_seg_name = src_seg_name[:-11]
+            src_seg_path = f"{src_img_dir}/{src_seg_name}"
+            dst_seg_path = f"{dst_seg_img_dir}/{dst_seg_name}"
+            shutil.copy(src_seg_path, dst_seg_path)
 
     # make bounding boxes
     os.makedirs(dst_bbx_dir)
@@ -327,11 +339,12 @@ def kaggleDS2NativeDS(src_data_path, dst_data_path):
     src_seg_img_names = os.listdir(dst_seg_img_dir)
     with tqdm(total=len(src_seg_img_names)) as pbar:
         for seg_nm in src_seg_img_names:
-            img = cv.imread(f"{dst_seg_img_dir}/{seg_nm}")
-            boxes = getBoundingBoxesFromSegmentation(img, classes)
-            txt_f_name = os.path.splitext(seg_nm)[0] + ".txt"
-            bbx_save_path = f"{dst_bbx_dir}/{txt_f_name}"
-            saveAnnotationsFile(boxes, bbx_save_path)
+            if all([num not in seg_nm for num in unwanted_nums]):
+                img = cv.imread(f"{dst_seg_img_dir}/{seg_nm}")
+                boxes = getBoundingBoxesFromSegmentation(img, classes)
+                txt_f_name = os.path.splitext(seg_nm)[0] + ".txt"
+                bbx_save_path = f"{dst_bbx_dir}/{txt_f_name}"
+                saveAnnotationsFile(boxes, bbx_save_path)
             pbar.update(1)
     # makeDetectionLabelsFromSegmentationLabels(dst_data_path, "all")
 
@@ -340,9 +353,110 @@ def kaggleDS2NativeDS(src_data_path, dst_data_path):
     print("---- Converting segmentation images to text format ----")
     with tqdm(total=len(src_seg_img_names)) as pbar:
         for seg_img_nm in src_seg_img_names:
-            seg_txt_nm = os.path.splitext(seg_img_nm)[0] + ".txt"
-            seg_img_path = f"{dst_seg_img_dir}/{seg_img_nm}"
-            seg_img = cv.imread(seg_img_path)
-            dst_seg_txt_path = f"{dst_seg_txt_dir}/{seg_txt_nm}"
-            makeDarknetSegmentationLabel(seg_img, dst_seg_txt_path, classes)
+            if all([num not in seg_img_nm for num in unwanted_nums]):
+                seg_txt_nm = os.path.splitext(seg_img_nm)[0] + ".txt"
+                seg_img_path = f"{dst_seg_img_dir}/{seg_img_nm}"
+                seg_img = cv.imread(seg_img_path)
+                dst_seg_txt_path = f"{dst_seg_txt_dir}/{seg_txt_nm}"
+                makeDarknetSegmentationLabel(seg_img, dst_seg_txt_path, classes)
             pbar.update(1)
+
+
+def dropLabelFromDataset(src_dir, dst_dir, bbx_lbls="all", seg_lbls="all"):
+    src_img_dir = f"{src_dir}/images"
+    src_bbx_dir = f"{src_dir}/bboxes"
+    src_seg_dir = f"{src_dir}/segments"
+    src_bbx_config_path = f"{src_dir}/bboxes.yaml"
+    src_seg_config_path = f"{src_dir}/segments.yaml"
+
+    dst_img_dir = f"{dst_dir}/images"
+    dst_bbx_dir = f"{dst_dir}/bboxes"
+    dst_seg_dir = f"{dst_dir}/segments"
+    dst_bbx_config_path = f"{dst_dir}/bboxes.yaml"
+    dst_seg_config_path = f"{dst_dir}/segments.yaml"
+
+    src_bbx_config = readDatasetConfig(src_bbx_config_path)
+    src_seg_config = readDatasetConfig(src_seg_config_path)
+
+    dst_bbx_config = src_bbx_config
+    dst_seg_config = src_seg_config
+    if bbx_lbls != "all":
+        dst_bbx_config = {"names": bbx_lbls, "nc": len(bbx_lbls)}
+        for lbl in bbx_lbls:
+            if lbl not in src_bbx_config["names"]:
+                raise ValueError(
+                    f"The class {lbl} was not found in the source directory of bounding boxes"
+                )
+    if seg_lbls != "all":
+        dst_seg_config = {"names": seg_lbls, "nc": len(seg_lbls)}
+        for lbl in seg_lbls:
+            if lbl not in src_seg_config["names"]:
+                raise ValueError(
+                    f"The class {lbl} was not found in the source directory of image segments"
+                )
+
+    for dir in [dst_img_dir, dst_bbx_dir, dst_seg_dir]:
+        os.makedirs(dir)
+    saveDatasetConfig(dst_bbx_config, dst_bbx_config_path)
+    saveDatasetConfig(dst_seg_config, dst_seg_config_path)
+
+    print("---- Copying image ----")
+    for img_nm in os.listdir(src_img_dir):
+        src_img_path = f"{src_img_dir}/{img_nm}"
+        dst_img_path = f"{dst_img_dir}/{img_nm}"
+        shutil.copy(src_img_path, dst_img_path)
+
+    if bbx_lbls == "all":
+        print("---- Copying bounding boxes ----")
+        for bbx_nm in os.listdir(src_bbx_dir):
+            src_bbx_path = f"{src_bbx_dir}/{bbx_nm}"
+            dst_bbx_path = f"{dst_bbx_dir}/{bbx_nm}"
+            shutil.copy(src_bbx_path, dst_bbx_path)
+    else:
+        print("---- Converting bounding boxes ----")
+        src_bbx_lbl_ids = [
+            src_bbx_config["names"].index(nm) for nm in dst_bbx_config["names"]
+        ]
+        dst_bbx_lbl_ids = np.arange(len(dst_bbx_config["names"])).tolist()
+        lbl_id_map = {k: v for (k, v) in zip(src_bbx_lbl_ids, dst_bbx_lbl_ids)}
+        print(src_bbx_lbl_ids, dst_bbx_lbl_ids, lbl_id_map)
+        with tqdm(total=len(os.listdir(src_bbx_dir))) as pbar:
+            for bbx_nm in os.listdir(src_bbx_dir):
+                src_bbx_path = f"{src_bbx_dir}/{bbx_nm}"
+                dst_bbx_path = f"{dst_bbx_dir}/{bbx_nm}"
+                src_bbx = readAnnotationsFile(src_bbx_path, True)
+                dst_bbx = []
+                for bbx in src_bbx:
+                    if bbx[0] in src_bbx_lbl_ids:
+                        bbx[0] = lbl_id_map[bbx[0]]
+                        dst_bbx.append(bbx)
+                saveAnnotationsFile(dst_bbx, dst_bbx_path)
+                pbar.update(1)
+
+    if seg_lbls == "all":
+        print("---- Copying segments ----")
+        for seg_nm in os.listdir(src_seg_dir):
+            src_seg_path = f"{src_seg_dir}/{seg_nm}"
+            dst_seg_path = f"{dst_seg_dir}/{seg_nm}"
+            shutil.copy(src_seg_path, dst_seg_path)
+    else:
+        print("---- Converting segments ----")
+        src_seg_lbl_ids = [
+            src_seg_config["names"].index(nm) for nm in dst_seg_config["names"]
+        ]
+        dst_seg_lbl_ids = [
+            dst_seg_config["names"].index(nm) for nm in dst_seg_config["names"]
+        ]
+        lbl_id_map = {k: v for (k, v) in zip(src_seg_lbl_ids, dst_seg_lbl_ids)}
+        with tqdm(total=len(os.listdir(src_seg_dir))) as pbar:
+            for seg_nm in os.listdir(src_seg_dir):
+                src_seg_path = f"{src_seg_dir}/{seg_nm}"
+                dst_seg_path = f"{dst_seg_dir}/{seg_nm}"
+                src_seg = readAnnotationsFile(src_seg_path, True)
+                dst_seg = []
+                for seg in src_seg:
+                    if seg[0] in src_seg_lbl_ids:
+                        seg[0] = lbl_id_map[seg[0]]
+                        dst_seg.append(seg)
+                saveAnnotationsFile(dst_seg, dst_seg_path)
+                pbar.update(1)

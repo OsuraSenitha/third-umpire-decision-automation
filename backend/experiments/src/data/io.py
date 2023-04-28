@@ -1,6 +1,6 @@
 from typing import Union, Tuple, Dict
 import numpy as np
-import json
+import json, yaml
 import cv2 as cv
 from .process import cvtAnnotationsTXT2LST, cvtAnnotationsLST2TXT
 
@@ -46,6 +46,18 @@ def readClassesFile(
     return classes
 
 
+def readDatasetConfig(path: str) -> Dict:
+    content = {}
+    with open(path) as handler:
+        content = yaml.load(handler, Loader=yaml.FullLoader)
+    return content
+
+
+def saveDatasetConfig(config: Dict, path: str) -> None:
+    with open(path, "w") as handler:
+        yaml.dump(config, handler)
+
+
 def readAnnotationsFile(
     file_path: str, tolist: bool = False
 ) -> Union[str, Tuple[Tuple]]:
@@ -70,20 +82,22 @@ def saveAnnotationsFile(
 
 def saveData(
     img: np.ndarray,
-    seg: np.ndarray,
-    lbl: Union[str, Tuple[Tuple]],
+    bbx: Union[str, Tuple[Tuple]],
+    seg: Union[str, Tuple[Tuple]],
     ds_path: str,
     obj_name: str,
 ) -> None:
     dst_img_path = f"{ds_path}/images/{obj_name}.png"
-    dst_seg_path = f"{ds_path}/segmentations/{obj_name}.txt"
-    dst_lbl_path = f"{ds_path}/labels/{obj_name}.txt"
+    dst_bbx_path = f"{ds_path}/bboxes/{obj_name}.txt"
+    dst_seg_path = f"{ds_path}/segments/{obj_name}.txt"
 
-    if type(lbl) != str:
-        lbl = cvtAnnotationsLST2TXT(lbl)
+    if type(bbx) != str:
+        bbx = cvtAnnotationsLST2TXT(bbx)
+    if type(seg) != str:
+        seg = cvtAnnotationsLST2TXT(seg)
 
     cv.imwrite(dst_img_path, img)
-    with open(dst_lbl_path, "w") as handler:
-        handler.write(lbl)
+    with open(dst_bbx_path, "w") as handler:
+        handler.write(bbx)
     with open(dst_seg_path, "w") as handler:
         handler.write(seg)
