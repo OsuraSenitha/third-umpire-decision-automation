@@ -1,15 +1,12 @@
 import boto3
 import shutil, os
-from pathlib import Path
-from tqdm.auto import tqdm
 
 
 class S3Downloader:
-    def __init__(self, creds_dir="/content/drive/MyDrive/.aws"):
-        home = str(Path.home())
-        if ".aws" not in os.listdir(home):
+    def __init__(self, creds_dir=None, home_dir=None):
+        if creds_dir is not None and home_dir is not None:
             if os.path.exists(creds_dir):
-                shutil.copytree(creds_dir, f"{home}/.aws")
+                shutil.copytree(creds_dir, f"{home_dir}/.aws")
             else:
                 raise FileNotFoundError("AWS Credentials were not found")
         self.client = boto3.client("s3")
@@ -47,12 +44,10 @@ class S3Downloader:
                 dir_objs = [
                     dir_obj for dir_obj in dir_objs if not self._is_dir(dir_obj)
                 ]
-                with tqdm(total=len(dir_objs)) as pbar:
-                    for src_path in dir_objs:
-                        dst_path = os.path.join(
-                            download_loc, src_path.lstrip(obj_key).strip("/")
-                        )
-                        dst_dir = os.path.split(dst_path)[0]
-                        os.makedirs(dst_dir, exist_ok=True)
-                        self.client.download_file(bucket_name, src_path, dst_path)
-                        pbar.update(1)
+                for src_path in dir_objs:
+                    dst_path = os.path.join(
+                        download_loc, src_path.lstrip(obj_key).strip("/")
+                    )
+                    dst_dir = os.path.split(dst_path)[0]
+                    os.makedirs(dst_dir, exist_ok=True)
+                    self.client.download_file(bucket_name, src_path, dst_path)
