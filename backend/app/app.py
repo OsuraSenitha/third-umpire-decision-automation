@@ -1,6 +1,8 @@
 import boto3
 import os
 from ml.object_detect import ObjectDetectModel
+from ml.batsman_segmentor import BatsmanSegmentor
+from ml.pipeline import Pipeline
 from util.file import S3Downloader
 
 SAM_WEIGHTS_NAME = os.environ["SAM_WEIGHTS_NAME"]
@@ -19,6 +21,8 @@ s3_client = boto3.client("s3")
 BUCKET_NAME = "third-umpire-decision-automation-osura"
 
 detection_model = ObjectDetectModel(YOLO_MODEL_PATH)
+segmentation_model = BatsmanSegmentor(SAM_MODEL_PATH)
+pipe = Pipeline(detection_model, segmentation_model)
 
 
 def handler(event, context):
@@ -26,17 +30,13 @@ def handler(event, context):
 
     img_key = event["imgKey"]
     filename = os.path.basename(img_key)
-    download_path = f"/tmp/{filename}"
+    img_path = f"/tmp/{filename}"
 
-    s3_client.download_file(Bucket=BUCKET_NAME, Key=img_key, Filename=download_path)
-
-    output = detection_model(download_path, 0.3)
-    annotations = output.tolist()
-
-    print(f"Sending annotations: {annotations}")
+    s3_client.download_file(Bucket=BUCKET_NAME, Key=img_key, Filename=img_path)
+    results = pipe(img_path)
 
     return {
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
-        "body": {"annotations": annotations},
+        "body": results,
     }

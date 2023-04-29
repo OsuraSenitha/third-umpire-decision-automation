@@ -3,3 +3,4 @@ opencv-python-headless
 numpy
 matplotlib
 boto3
+git+https://github.com/facebookresearch/segment-anything.git
