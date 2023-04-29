@@ -8,7 +8,7 @@ YOLO_WEIGHTS_NAME = os.environ["YOLO_WEIGHTS_NAME"]
 
 MODELS_PATH = "/tmp/model-weights"
 
-downloader = S3Downloader(None)
+downloader = S3Downloader()
 downloader.download(
     "s3://third-umpire-decision-automation-osura/model-weights", MODELS_PATH
 )
@@ -18,7 +18,6 @@ YOLO_MODEL_PATH = f"{MODELS_PATH}/{YOLO_WEIGHTS_NAME}"
 s3_client = boto3.client("s3")
 BUCKET_NAME = "third-umpire-decision-automation-osura"
 
-# onnx_path = "ml/best.onnx"
 detection_model = ObjectDetectModel(YOLO_MODEL_PATH)
 
 
@@ -31,7 +30,7 @@ def handler(event, context):
 
     s3_client.download_file(Bucket=BUCKET_NAME, Key=img_key, Filename=download_path)
 
-    output = detection_model(download_path)
+    output = detection_model(download_path, 0.3)
     annotations = output.tolist()
 
     print(f"Sending annotations: {annotations}")
