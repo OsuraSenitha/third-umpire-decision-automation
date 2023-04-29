@@ -18,13 +18,19 @@ ARG FUNCTION_DIR
 RUN mkdir -p ${FUNCTION_DIR}
 
 RUN pip install --upgrade pip
-COPY requirements.txt .
-RUN pip install -r requirements.txt --target ${FUNCTION_DIR}
 
 # Install the runtime interface client
 RUN pip install \
         --target ${FUNCTION_DIR} \
         awslambdaric
+
+# Install pytorch for CPU
+COPY requirements-torch-cpu.txt .
+RUN pip install -r requirements-torch-cpu.txt --target ${FUNCTION_DIR} --index-url https://download.pytorch.org/whl/cpu
+
+# Install other packages
+COPY requirements.txt .
+RUN pip install -r requirements.txt --target ${FUNCTION_DIR}
 
 # Multi-stage build: grab a fresh copy of the base image
 FROM python:3.9-buster
