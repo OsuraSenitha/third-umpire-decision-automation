@@ -39,6 +39,7 @@ def handler(event, context):
             results = pipe(
                 img_path,
                 batsman_analysis_image_path="/tmp/results/batsman-analysis.jpg",
+                wicket_img_path="/tmp/results/wicket.jpg"
             )
             results = output_processor(results)
 
