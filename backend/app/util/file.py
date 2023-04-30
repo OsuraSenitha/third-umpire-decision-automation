@@ -2,7 +2,7 @@ from typing import Dict
 import boto3
 import shutil, os
 from uuid import uuid4
-from ..infer.pipeline import PipelineOutput
+from ml.pipeline import PipelineOutput
 
 
 class S3Downloader:
