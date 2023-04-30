@@ -12,18 +12,22 @@ import {
     displayResults,
     handleClear,
     handleProcess,
-    handleRemoveImg,
-    stringifyAnnotation,
     updateImageDim,
 } from "@/functions/app";
 import { LoadingButton } from "@mui/lab";
 import { TEST_FILES_LINK } from "@/constants/routes";
+import OutputRegion from "@/containers/outputRegion/OutputRegion";
+import SelectedImage from "@/containers/inputRegion/selectedImage/SelectedImage";
+import SelectImage from "@/containers/inputRegion/selectImage/SelectImage";
+import commonStyles from "@/styles/commonStyles";
+import InputRegion from "@/containers/inputRegion/InputRegion";
 
 export default function Home() {
+    const initResults = { annotations: [] };
     const [umpImg, setUmpImg] = useState();
     const [imgDim, setImgDim] = useState();
     const [processing, setProcessing] = useState(false);
-    const [annotations, setAnnotations] = useState([]);
+    const [results, setResults] = useState(initResults);
     const canHeight = imgDim && parseInt((600 / imgDim[0]) * imgDim[1]) + "px";
 
     const canvasRef = useRef();
@@ -37,9 +41,9 @@ export default function Home() {
     }, [umpImg]);
 
     useEffect(() => {
-        if (annotations.length > 0)
-            displayResults(annotations, canvasRef, imgDim);
-    }, [annotations]);
+        if (results.annotations.length > 0)
+            displayResults(results.annotations, canvasRef, imgDim);
+    }, [results]);
     return (
         <>
             <Head>
@@ -51,82 +55,16 @@ export default function Home() {
             </Head>
             <main style={styles.root}>
                 <Box sx={styles.appRoot}>
-                    <a href={TEST_FILES_LINK} target="_blank">
-                        <Button
-                            sx={styles.btn}
-                            variant="contained"
-                            endIcon={<OpenInNew />}
-                        >
-                            Test Files
-                        </Button>
-                    </a>
-                    <input
-                        type="file"
-                        onChange={(e) => setUmpImg(e.target.files[0])}
-                        ref={inputRef}
-                        hidden
+                    <InputRegion
+                        umpImg={umpImg}
+                        setUmpImg={setUmpImg}
+                        inputRef={inputRef}
+                        canHeight={canHeight}
+                        canvasRef={canvasRef}
+                        setResults={setResults}
+                        results={results}
+                        initResults={initResults}
                     />
-                    {!umpImg && (
-                        <Box sx={styles.fileSelect}>
-                            <Button onClick={() => inputRef.current.click()}>
-                                Choose File
-                            </Button>
-                            <Typography variant="body1">
-                                {umpImg ? umpImg.name : "No file chosen"}
-                            </Typography>
-                        </Box>
-                    )}
-                    {umpImg && (
-                        <Box>
-                            <Box sx={styles.imgContainer}>
-                                <img
-                                    src={URL.createObjectURL(umpImg)}
-                                    style={{
-                                        width: "600px",
-                                        height: canHeight,
-                                    }}
-                                />
-                                <canvas
-                                    ref={canvasRef}
-                                    style={{
-                                        width: "600px",
-                                        height: canHeight,
-                                        position: "absolute",
-                                        left: 0,
-                                        top: 0,
-                                    }}
-                                />
-                                <Close
-                                    sx={styles.closeIcon}
-                                    onClick={() =>
-                                        handleRemoveImg({
-                                            setImg: setUmpImg,
-                                            setAnnotations,
-                                            inputRef,
-                                        })
-                                    }
-                                />
-                                {annotations.length !== 0 && (
-                                    <Box sx={styles.resultPane}>
-                                        <Typography variant="body1">
-                                            Objects detected at
-                                        </Typography>
-                                        <ul>
-                                            {annotations.map(
-                                                (annotation, index) => (
-                                                    <li key={index}>
-                                                        {stringifyAnnotation(
-                                                            annotation
-                                                        )}
-                                                    </li>
-                                                )
-                                            )}
-                                        </ul>
-                                    </Box>
-                                )}
-                            </Box>
-                        </Box>
-                    )}
                     <Box sx={styles.btnContainer}>
                         <LoadingButton
                             onClick={() =>
@@ -135,15 +73,16 @@ export default function Home() {
                                     canvasRef,
                                     imgDim,
                                     setProcessing,
-                                    setAnnotations,
+                                    setResults,
                                 }).catch(console.error)
                             }
                             variant="contained"
                             loading={processing}
-                            sx={styles.btn}
+                            sx={commonStyles.btn}
                             endIcon={<PlayCircleOutline />}
                             disabled={
-                                annotations.length !== 0 || umpImg === undefined
+                                results.annotations.length !== 0 ||
+                                umpImg === undefined
                             }
                         >
                             Process
@@ -151,14 +90,15 @@ export default function Home() {
                         <Button
                             variant="contained"
                             onClick={() => handleClear(canvasRef)}
-                            sx={styles.btn}
+                            sx={commonStyles.btn}
                             endIcon={<RestartAlt />}
                             color="error"
-                            disabled={annotations.length === 0}
+                            disabled={results.annotations.length === 0}
                         >
                             Clear
                         </Button>
                     </Box>
+                    <OutputRegion batsman_img_path="s3://third-umpire-decision-automation-osura/results/0b3ad937-0a46-4568-9e93-ec2fb015260a/batsman-analysis-img.jpg" />
                 </Box>
             </main>
         </>

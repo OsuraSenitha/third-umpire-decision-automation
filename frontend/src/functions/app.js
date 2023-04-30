@@ -44,16 +44,19 @@ export const handleProcess = async ({
     canvasRef,
     imgDim,
     setProcessing,
-    setAnnotations,
+    setResults,
 }) => {
     if (img) {
         setProcessing(true);
         const imgKey = await handleUpload(img);
         const lambdaRes = await handleInfer(imgKey);
         console.log(lambdaRes);
-        const annotations = JSON.parse(lambdaRes).body.annotations;
-        setAnnotations(annotations);
-        displayResults(lambdaRes, canvasRef, imgDim);
+        const parsed_res = JSON.parse(lambdaRes);
+        if (parsed_res.statusCode == 200) {
+            const annotations = parsed_res.body.annotations;
+            setResults({ annotations });
+            displayResults(lambdaRes, canvasRef, imgDim);
+        }
         setProcessing(false);
     }
 };
@@ -80,10 +83,9 @@ export const annotate = (canvasRef, box, number, imgDim) => {
     context.strokeRect(can_x, can_y, can_w, can_h);
 };
 
-export const handleRemoveImg = ({ inputRef, setImg, setAnnotations }) => {
+export const handleRemoveImg = ({ setImg, setResults, initResults }) => {
     setImg();
-    setAnnotations([]);
-    inputRef.current.value = "";
+    setResults(initResults);
 };
 
 export const handleClear = (canvasRef) => {
@@ -110,5 +112,5 @@ export const stringifyAnnotation = (annotation) => {
     let [x, y, w, h] = [x1, y1, x1, x2, y1 - y2];
     [x, y, w, h] = [x, y, w, h].map((flt) => Math.round(flt));
 
-    return `x: ${x}, y: ${y}, width: ${w}, height: ${h}, object key: ${number}`;
+    return `${number}     x: ${x}, y: ${y}, width: ${w}, height: ${h}`;
 };
