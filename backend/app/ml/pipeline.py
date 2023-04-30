@@ -1,4 +1,5 @@
 import numpy as np
+import cv2 as cv
 from typing import Any
 from .object_detector import ObjectDetectModel
 from .yolo_image_segmentor import ImageSegmentModel
@@ -14,7 +15,17 @@ class PipelineOutput:
         batsman_result: bool,
         batsman_analysis_img_path: str,
         wicket_result: bool,
+        img_path: str,
     ) -> None:
+        img = cv.imread(img_path)
+        H, W, _ = img.shape
+        batsman_box[0::2] *= W
+        batsman_box[1::2] *= H
+        wicket_box[0::2] *= W
+        wicket_box[1::2] *= H
+        batsman_box = batsman_box.astype(int)
+        wicket_box = wicket_box.astype(int)
+
         self.annotations = [
             ["Batsman", *batsman_box.tolist()],
             ["Wicket", *wicket_box.tolist()],
@@ -55,6 +66,7 @@ class Pipeline:
             batsman_result,
             batsman_analysis_image_path,
             wicket_result,
+            img_path,
         )
 
         return results
