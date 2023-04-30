@@ -1,12 +1,7 @@
 import Head from "next/head";
 import styles from "@/styles/pageStyles/index.js";
-import { Box, Button, Typography, alpha, useTheme } from "@mui/material";
-import {
-    Close,
-    OpenInNew,
-    PlayCircleOutline,
-    RestartAlt,
-} from "@mui/icons-material";
+import { Box, Button } from "@mui/material";
+import { PlayCircleOutline, RestartAlt } from "@mui/icons-material";
 import { useEffect, useRef, useState } from "react";
 import {
     displayResults,
@@ -15,10 +10,7 @@ import {
     updateImageDim,
 } from "@/functions/app";
 import { LoadingButton } from "@mui/lab";
-import { TEST_FILES_LINK } from "@/constants/routes";
 import OutputRegion from "@/containers/outputRegion/OutputRegion";
-import SelectedImage from "@/containers/inputRegion/selectedImage/SelectedImage";
-import SelectImage from "@/containers/inputRegion/selectImage/SelectImage";
 import commonStyles from "@/styles/commonStyles";
 import InputRegion from "@/containers/inputRegion/InputRegion";
 
@@ -32,6 +24,7 @@ export default function Home() {
 
     const canvasRef = useRef();
     const inputRef = useRef();
+    const imgRef = useRef();
 
     useEffect(() => {
         if (umpImg) {
@@ -56,6 +49,7 @@ export default function Home() {
             <main style={styles.root}>
                 <Box sx={styles.appRoot}>
                     <InputRegion
+                        imgRef={imgRef}
                         umpImg={umpImg}
                         setUmpImg={setUmpImg}
                         inputRef={inputRef}
@@ -87,7 +81,7 @@ export default function Home() {
                         >
                             Process
                         </LoadingButton>
-                        <Button
+                        {/* <Button
                             variant="contained"
                             onClick={() => handleClear(canvasRef)}
                             sx={commonStyles.btn}
@@ -96,9 +90,16 @@ export default function Home() {
                             disabled={results.annotations.length === 0}
                         >
                             Clear
-                        </Button>
+                        </Button> */}
                     </Box>
-                    <OutputRegion batsman_img_path="s3://third-umpire-decision-automation-osura/results/0b3ad937-0a46-4568-9e93-ec2fb015260a/batsman-analysis-img.jpg" />
+                    {results.batsman_img_src && (
+                        <OutputRegion
+                            batsmanImgSrc={results.batsman_img_src}
+                            batsmanComment={results.batsman_comment}
+                            wicketImgSrc={results.wicket_img_src}
+                            wicketComment={results.wicket_comment}
+                        />
+                    )}
                 </Box>
             </main>
         </>

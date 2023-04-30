@@ -9,9 +9,8 @@ const SelectedImage = ({
     canvasRef,
     setUmpImg,
     setResults,
-    results,
     initResults,
-    inputRef,
+    imgRef,
 }) => {
     return (
         <Box>
@@ -22,6 +21,7 @@ const SelectedImage = ({
                         width: "600px",
                         height: canHeight,
                     }}
+                    ref={imgRef}
                 />
                 <canvas
                     ref={canvasRef}
@@ -43,12 +43,12 @@ const SelectedImage = ({
                         })
                     }
                 />
-                {results.annotations.length !== 0 && (
+                {/* {results.annotations.length !== 0 && (
                     <Box sx={styles.resultPane}>
                         <Typography variant="body1">
                             Objects detected at
                         </Typography>
-                        <ul>
+                        <ul style={{ listStyle: "none" }}>
                             {results.annotations.map((annotation, index) => (
                                 <li key={index}>
                                     {stringifyAnnotation(annotation)}
@@ -56,7 +56,7 @@ const SelectedImage = ({
                             ))}
                         </ul>
                     </Box>
-                )}
+                )} */}
             </Box>
         </Box>
     );

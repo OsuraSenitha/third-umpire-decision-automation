@@ -1,35 +1,4 @@
-import { InvokeCommand } from "@aws-sdk/client-lambda";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { lambdaClient, s3Client } from "@/clients/aws";
-import {
-    AWS_LAMBDA_NAME,
-    AWS_S3_CLIENT_IMG_KEY,
-    AWS_S3_NAME,
-} from "@/constants/aws-resources";
-
-const handleUpload = async (lpImg) => {
-    console.log("Uploading");
-    const imgKey = AWS_S3_CLIENT_IMG_KEY + lpImg.name;
-    const bucketParams = {
-        Bucket: AWS_S3_NAME,
-        Key: imgKey,
-        Body: lpImg,
-    };
-    await s3Client.send(new PutObjectCommand(bucketParams));
-    return imgKey;
-};
-
-const handleInfer = async (imgKey) => {
-    console.log("Infering");
-    const payload = { imgKey };
-    const command = new InvokeCommand({
-        FunctionName: AWS_LAMBDA_NAME,
-        Payload: JSON.stringify(payload),
-    });
-    const { Payload } = await lambdaClient.send(command);
-    const result = Buffer.from(Payload).toString();
-    return result;
-};
+import { handleDownload, handleInfer, handleUpload } from "./aws";
 
 export const displayResults = (annotations, canvasRef, imgDim) => {
     for (let i = 0; i < annotations.length; i++) {
@@ -53,9 +22,20 @@ export const handleProcess = async ({
         console.log(lambdaRes);
         const parsed_res = JSON.parse(lambdaRes);
         if (parsed_res.statusCode == 200) {
-            const annotations = parsed_res.body.annotations;
-            setResults({ annotations });
+            console.log(parsed_res.body);
+            const batsman_img_src = await handleDownload({
+                imgS3Uri: parsed_res.body.batsman_analysis_img_s3_uri,
+            });
+            console.log(parsed_res.body.wicket_s3_uri);
+            const wicket_img_src = await handleDownload({
+                imgS3Uri: parsed_res.body.wicket_s3_uri,
+            });
+            parsed_res.body.batsman_img_src = batsman_img_src;
+            parsed_res.body.wicket_img_src = wicket_img_src;
+            setResults(parsed_res.body);
             displayResults(lambdaRes, canvasRef, imgDim);
+        } else {
+            console.error(parsed_res.body);
         }
         setProcessing(false);
     }

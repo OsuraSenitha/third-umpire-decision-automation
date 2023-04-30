@@ -12,7 +12,7 @@ const InputRegion = ({
     canHeight,
     canvasRef,
     setResults,
-    results,
+    imgRef,
     initResults,
 }) => {
     return (
@@ -40,9 +40,8 @@ const InputRegion = ({
                     canvasRef={canvasRef}
                     setUmpImg={setUmpImg}
                     setResults={setResults}
-                    results={results}
                     initResults={initResults}
-                    inputRef={inputRef}
+                    imgRef={imgRef}
                 />
             )}
         </Box>
