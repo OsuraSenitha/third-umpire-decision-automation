@@ -1,5 +1,5 @@
 import boto3
-import os
+import os, traceback
 from ml.pipeline import Pipeline
 from util.file import S3Downloader, OutputProcessor
 
@@ -29,20 +29,34 @@ output_processor = OutputProcessor(s3_client, BUCKET_NAME, OUTPUT_KEY)
 
 
 def handler(event, context):
-    print(event)
+    if "imgKey" in event.keys():
+        try:
+            img_key = event["imgKey"]
+            filename = os.path.basename(img_key)
+            img_path = f"/tmp/{filename}"
 
-    img_key = event["imgKey"]
-    filename = os.path.basename(img_key)
-    img_path = f"/tmp/{filename}"
+            s3_client.download_file(Bucket=BUCKET_NAME, Key=img_key, Filename=img_path)
+            results = pipe(
+                img_path,
+                batsman_analysis_image_path="/tmp/results/batsman-analysis.jpg",
+            )
+            results = output_processor(results)
 
-    s3_client.download_file(Bucket=BUCKET_NAME, Key=img_key, Filename=img_path)
-    results = pipe(
-        img_path, batsman_analysis_image_path="/tmp/results/batsman-analysis.jpg"
-    )
-    results = output_processor(results)
-
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
-        "body": results,
-    }
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": results,
+            }
+        except Exception as e:
+            traceback.print_exc()
+            return {
+                "statusCode": 500,
+                "headers": {"Content-Type": "application/json"},
+                "body": {"message": "Unknown server error"},
+            }
+    else:
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": {"message": "'imgKey' was not found in the request body"},
+        }
