@@ -5,6 +5,7 @@ from util.file import S3Downloader, OutputProcessor
 
 OBJ_DECT_WEIGHTS_NAME = os.environ["OBJ_DECT_WEIGHTS_NAME"]
 IM_SEG_WEIGHTS_NAME = os.environ["IM_SEG_WEIGHTS_NAME"]
+CLASSIFY_WEIGHTS_NAME = os.environ["CLASSIFY_WEIGHTS_NAME"]
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 OUTPUT_KEY = os.environ["OUTPUT_KEY"]
 
@@ -15,12 +16,14 @@ downloader.download(
 )
 OBJ_DECT_MODEL_PATH = f"{MODELS_PATH}/{OBJ_DECT_WEIGHTS_NAME}"
 IM_SEG_MODEL_PATH = f"{MODELS_PATH}/{IM_SEG_WEIGHTS_NAME}"
+CLASSIFY_MODEL_PATH = f"{MODELS_PATH}/{CLASSIFY_WEIGHTS_NAME}"
 
 s3_client = boto3.client("s3")
 
 pipe = Pipeline(
     object_detect_model_path=OBJ_DECT_MODEL_PATH,
     image_segment_model_path=IM_SEG_MODEL_PATH,
+    classifier_model_path=CLASSIFY_MODEL_PATH,
 )
 output_processor = OutputProcessor(s3_client, BUCKET_NAME, OUTPUT_KEY)
 
