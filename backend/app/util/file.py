@@ -89,7 +89,7 @@ class OutputProcessor:
             "annotations": pipe_results.annotations,
             "batsman_comment": str(pipe_results.batsman_result),
             "batsman_analysis_img_s3_uri": dst_batsman_s3_uri,
-            "wicket_s3_uri:": dst_wicket_s3_uri,
+            "wicket_s3_uri": dst_wicket_s3_uri,
             "wicket_comment": str(pipe_results.wicket_result),
             "job_id": self.id,
         }
