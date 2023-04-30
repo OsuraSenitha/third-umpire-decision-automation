@@ -251,6 +251,12 @@ class ObjectDetectModel:
         boxes[:, 0::2] = boxes[:, 0::2] / image_width
         boxes[:, 1::2] = boxes[:, 1::2] / image_height
 
+        # make sure that the values stays within range
+        minval = np.zeros((boxes.shape[0], 2))
+        maxval = np.ones((boxes.shape[0], 2))
+        boxes[:, :2] = np.max([boxes[:, :2], minval], axis=0)
+        boxes[:, 2:] = np.min([boxes[:, 2:], maxval], axis=0)
+
         output = ObjectDetectOutput(boxes, scores, labels, image)
 
         return output
