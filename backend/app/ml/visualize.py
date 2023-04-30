@@ -52,11 +52,11 @@ def drawSegment(
             drawn_img * (1 - overlay_ratio) + overlay_img * overlay_ratio
         ).astype(drawn_img.dtype)
 
-    point_radius = max(int(min(H, W) / 160), 1)
-    for x, y in zip(X, Y):
-        drawn_img = cv.circle(
-            drawn_img, center=(x, y), radius=point_radius, color=color, thickness=-1
-        )
+    # point_radius = max(int(line_width * 1.5), 1)
+    # for x, y in zip(X, Y):
+    #     drawn_img = cv.circle(
+    #         drawn_img, center=(x, y), radius=point_radius, color=color, thickness=-1
+    #     )
 
     return drawn_img
 

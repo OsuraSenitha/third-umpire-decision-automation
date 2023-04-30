@@ -3,49 +3,36 @@ from typing import Dict, Tuple
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
-from .visualize import getx1y1x2y2FromRhoTheta, drawLine, drawSegments
+from .visualize import getx1y1x2y2FromRhoTheta, drawLine, drawSegment, drawSegments
 
 
 class CreaseCrossDetector:
     def _extract_focus_region(
-        self, img, batsmen_segments, wicket_bbx=None, batsmen_possible_clearence=0.5
+        self, img, batsmen_segment, wicket_bbx=None, batsmen_possible_clearence=0.5
     ):
         if wicket_bbx is None:
-            return img, batsmen_segments
+            return img, batsmen_segment
         else:
             # output from the segmentation model (maped back to the image dimensios)
             H, W, _ = img.shape
-            xmax, xmin = 0, W
-            for seg in batsmen_segments:
-                seg_xmax = int(max(seg[1::2]) * W)
-                if seg_xmax > xmax:
-                    xmax = seg_xmax
-                seg_xmin = int(min(seg[1::2]) * W)
-                if seg_xmin < xmin:
-                    xmin = seg_xmin
+
+            xmax = int(max(batsmen_segment[0::2]) * W)
+            xmin = int(min(batsmen_segment[0::2]) * W)
             left_trim = xmin + int((xmax - xmin) * batsmen_possible_clearence)
 
-            right_trim = W
-
-            # TODO: Check why the y, h are not used
-            x, y, w, h = wicket_bbx
-            bbx_xmin = int(x * W - (w * W) / 2)
-            if bbx_xmin < right_trim:
-                right_trim = bbx_xmin
+            right_trim = int(wicket_bbx[0] * W)
 
             new_W = right_trim - left_trim
-            batsmen_segments_focused = []
-            for seg in batsmen_segments:
-                new_x = np.array(seg[1::2]) * W
-                new_x -= left_trim
-                new_x = new_x.clip(0) / new_W
-                new_seg = [*seg]
-                new_seg[1::2] = new_x.tolist()
-                batsmen_segments_focused.append(new_seg)
+
+            new_x = np.array(batsmen_segment[0::2]) * W
+            new_x -= left_trim
+            new_x = new_x.clip(0) / new_W
+            new_batsmen_segment = [*batsmen_segment]
+            new_batsmen_segment[0::2] = new_x.tolist()
 
             focus_region = img[:, left_trim:right_trim, :]
 
-            return focus_region, batsmen_segments_focused
+            return focus_region, new_batsmen_segment
 
     def _get_line_intersection(
         self, line1: Tuple[float], line2: Tuple[float]
@@ -72,32 +59,28 @@ class CreaseCrossDetector:
     def _fill_pts(
         self,
         img_shape: Tuple[int],
-        pts_lst: Tuple,
+        pts: Tuple,
         normalized: bool = True,
         color: Tuple[int] = [0, 255, 0],
     ) -> np.ndarray:
         H, W, _ = img_shape
-        conts = []
-        for pts in pts_lst:
-            pts = np.array(pts)
-            if normalized:
-                pts[0::2] *= W
-                pts[1::2] *= H
-            pts = pts.astype(int).reshape((-1, 2))
-            conts.append(pts)
+
+        pts = np.array(pts)
+        if normalized:
+            pts[0::2] *= W
+            pts[1::2] *= H
+        pts = pts.astype(int).reshape((-1, 2))
 
         overlay = np.zeros(img_shape).astype(np.uint8)
-        cv.fillPoly(overlay, pts=conts, color=color)
+        cv.fillPoly(overlay, pts=[pts], color=color)
 
         return overlay
 
-    def _get_segments_intersections(self, img_shape, segs_1, segs_2):
-        pts_1 = list(map(lambda pt_line: pt_line[1:], segs_1))
-        pts_2 = list(map(lambda pt_line: pt_line[1:], segs_2))
+    def _get_segments_intersections(self, img_shape, pts_1, pts_2):
         mask_1 = (
             self._fill_pts(
                 img_shape=[*img_shape[:2], 1],
-                pts_lst=pts_1,
+                pts=pts_1,
                 color=1,
             )
             .squeeze()
@@ -106,7 +89,7 @@ class CreaseCrossDetector:
         mask_2 = (
             self._fill_pts(
                 img_shape=[*img_shape[:2], 1],
-                pts_lst=pts_2,
+                pts=pts_2,
                 color=1,
             )
             .squeeze()
@@ -117,7 +100,7 @@ class CreaseCrossDetector:
         return intersection
 
     def _find_crease_pass(
-        self, focus_region, batsmen_segments, save_path="crease-pass-output.png"
+        self, focus_region, batsmen_segment, save_path="crease-pass-output.png"
     ):
         H, W, _ = focus_region.shape
 
@@ -168,9 +151,9 @@ class CreaseCrossDetector:
         first_line_xy[1::2] = first_line_xy[1::2] / H
         second_line_xy[0::2] = second_line_xy[0::2] / W
         second_line_xy[1::2] = second_line_xy[1::2] / H
-        crease_segs = [[0, *np.roll(first_line_xy, 2), *second_line_xy]]
+        crease_seg = [*np.roll(first_line_xy, 2).tolist(), *second_line_xy]
         intersection = self._get_segments_intersections(
-            focus_region.shape, batsmen_segments, crease_segs
+            focus_region.shape, batsmen_segment, crease_seg
         )
         passed_crease = intersection.any()
 
@@ -178,19 +161,20 @@ class CreaseCrossDetector:
         drawLine(line_drawn_img, first_line)
         drawLine(line_drawn_img, second_line)
 
-        segs_drawn_img = drawSegments(
-            focus_region,
-            batsmen_segments,
+        segs_drawn_img = focus_region.copy()
+        segs_drawn_img = drawSegment(
+            segs_drawn_img,
+            batsmen_segment,
             color=[0, 255, 0],
             line_width_scale=0.004,
-            color_overlay_ratio=1,
+            overlay_ratio=0.3,
         )
-        segs_drawn_img = drawSegments(
+        segs_drawn_img = drawSegment(
             segs_drawn_img,
-            crease_segs,
+            crease_seg,
             color=[0, 0, 255],
             line_width_scale=0.004,
-            color_overlay_ratio=1,
+            overlay_ratio=0.3,
         )
 
         intersection_img = focus_region.copy()
@@ -216,6 +200,9 @@ class CreaseCrossDetector:
                 ax[i][j].set_yticks([])
 
         save_path = os.path.abspath(save_path)
+        export_dir = os.path.split(save_path)[0]
+        os.makedirs(export_dir, exist_ok=True)
+
         plt.tight_layout()
         plt.savefig(save_path)
         plt.close()
@@ -230,10 +217,10 @@ class CreaseCrossDetector:
         save_path: str = "crease-pass-output.png",
     ) -> Dict:
         img = cv.imread(img_path)
-        focus_region, batsmen_segments_focused = self._extract_focus_region(
+        focus_region, batsmen_segment_focused = self._extract_focus_region(
             img, batsman_seg, wicket_bbx
         )
         passed, save_path = self._find_crease_pass(
-            focus_region, batsmen_segments_focused, save_path
+            focus_region, batsmen_segment_focused, save_path
         )
-        return passed, save_path
+        return passed
