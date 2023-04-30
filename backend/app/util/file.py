@@ -70,17 +70,26 @@ class OutputProcessor:
 
     def __call__(self, pipe_results: PipelineOutput) -> Dict:
         src_batsman_img_analysis_path = pipe_results.batsman_analysis_img_path
+        src_wicket_img_path = pipe_results.wicket_img_path
         dst_batsman_s3_key = (
             self.results_key + "/" + self.id + "/batsman-analysis-img.jpg"
         )
+        dst_wicket_s3_key = self.results_key + "/" + self.id + "/wicket-croped-img.jpg"
+        # batsman image upload
         self.s3_client.upload_file(
             src_batsman_img_analysis_path, self.output_bucket, dst_batsman_s3_key
         )
+        # wicket image upload
+        self.s3_client.upload_file(
+            src_wicket_img_path, self.output_bucket, dst_wicket_s3_key
+        )
         dst_batsman_s3_uri = f"s3://{self.output_bucket}/{dst_batsman_s3_key}"
+        dst_wicket_s3_uri = f"s3://{self.output_bucket}/{dst_wicket_s3_key}"
         body = {
             "annotations": pipe_results.annotations,
             "batsman_comment": str(pipe_results.batsman_result),
             "batsman_analysis_img_s3_uri": dst_batsman_s3_uri,
+            "dst_wicket_s3_uri:": dst_wicket_s3_uri,
             "wicket_comment": str(pipe_results.wicket_result),
             "job_id": self.id,
         }

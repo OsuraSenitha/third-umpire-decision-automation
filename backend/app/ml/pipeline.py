@@ -15,6 +15,7 @@ class PipelineOutput:
         batsman_result: bool,
         batsman_analysis_img_path: str,
         wicket_result: bool,
+        wicket_img_path: str,
         img_path: str,
     ) -> None:
         img = cv.imread(img_path)
@@ -33,6 +34,7 @@ class PipelineOutput:
         self.batsman_result = batsman_result
         self.batsman_analysis_img_path = batsman_analysis_img_path
         self.wicket_result = wicket_result
+        self.wicket_img_path = wicket_img_path
 
 
 class Pipeline:
@@ -49,7 +51,7 @@ class Pipeline:
         self.crease_cross_detector = crease_cross_detector
         self.classifier = classifier
 
-    def __call__(self, img_path, batsman_analysis_image_path) -> Any:
+    def __call__(self, img_path, batsman_analysis_image_path, wicket_img_path) -> Any:
         detection_output = self.object_detector(img_path)
         batsman_box = detection_output.getBoxFromLabel("Batsmen")
         wicket_box = detection_output.getBoxFromLabel("Wicket")
@@ -59,6 +61,7 @@ class Pipeline:
             img_path, batsman_seg, wicket_box, batsman_analysis_image_path
         )
         wicket_result = self.classifier(img_path, wicket_box)
+        self._trim_wicket(img_path, wicket_box, wicket_img_path)
 
         results = PipelineOutput(
             batsman_box,
@@ -66,7 +69,18 @@ class Pipeline:
             batsman_result,
             batsman_analysis_image_path,
             wicket_result,
+            wicket_img_path,
             img_path,
         )
 
         return results
+
+    def _trim_wicket(self, img_path, wicket_box, wicket_img_path):
+        img = cv.imread(img_path)
+        H, W, _ = img.shape
+        wicket_box[0::2] *= W
+        wicket_box[1::2] *= H
+        x1, y1, x2, y2 = wicket_box.astype(int)
+        print(x1, x2, y1, y2)
+        wicket_img = img[y1:y2, x1:x2, :]
+        cv.imwrite(wicket_img_path, wicket_img)
