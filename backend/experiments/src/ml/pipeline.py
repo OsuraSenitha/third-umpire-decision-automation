@@ -1,5 +1,6 @@
 import numpy as np
 import cv2 as cv
+import json
 from typing import Any
 from .object_detector import ObjectDetectModel
 from .yolo_image_segmentor import ImageSegmentModel
@@ -36,6 +37,17 @@ class PipelineOutput:
         self.wicket_result = wicket_result
         self.wicket_img_path = wicket_img_path
 
+    def __str__(self) -> str:
+        self_desc = {
+            "annotations": self.annotations,
+            "batsman_result": self.batsman_result,
+            "batsman_analysis_img_path": self.batsman_analysis_img_path,
+            "wicket_result": self.wicket_result,
+            "wicket_img_path": self.wicket_img_path,
+        }
+        self_desc = json.dumps(self_desc, indent=2)
+        return self_desc
+
 
 class Pipeline:
     def __init__(
@@ -56,10 +68,19 @@ class Pipeline:
         batsman_box = detection_output.getBoxFromLabel("Batsmen")
         wicket_box = detection_output.getBoxFromLabel("Wicket")
 
-        batsman_seg = self.image_segmentor(img_path, batsman_box)
-        batsman_result = self.crease_cross_detector(
-            img_path, batsman_seg, wicket_box, batsman_analysis_image_path
-        )
+        try:
+            batsman_seg = self.image_segmentor(img_path, batsman_box)
+            batsman_result = self.crease_cross_detector(
+                img_path, batsman_seg, wicket_box, batsman_analysis_image_path
+            )
+        except RuntimeError as e:
+            if str(e) == "Batsman segmentation was not found":
+                print("ALGO LOGS: Batsman segmentation was not found")
+                batsman_result = None
+                batsman_analysis_image_path = None
+            else:
+                raise e
+
         wicket_result = self.classifier(img_path, wicket_box)
         self._trim_wicket(img_path, wicket_box, wicket_img_path)
 

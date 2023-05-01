@@ -107,7 +107,6 @@ def nms(boxes, scores, iou_threshold):
         # Remove boxes with IoU over the threshold
         keep_indices = np.where(ious < iou_threshold)[0]
 
-        # print(keep_indices.shape, sorted_indices.shape)
         sorted_indices = sorted_indices[keep_indices + 1]
 
     return keep_boxes
@@ -210,7 +209,9 @@ class ImageSegmentModel:
         # Initialize model
         self.initialize_model(path)
 
-    def _get_batsman_boundary(self, bounding_box, image_shape, mask_maps):
+    def _get_batsman_boundary(
+        self, bounding_box, image_shape, mask_maps
+    ) -> Tuple[float]:
         x1, y1, x2, y2 = bounding_box
         resized_mask_shape = [mask_maps.shape[0], *image_shape[:2]]
         mask_maps_resized = np.zeros(resized_mask_shape).astype(bool)
@@ -245,13 +246,15 @@ class ImageSegmentModel:
         image_trimmed = image[y1:y2, x1:x2, :]
         return image_trimmed, image_shape, bounding_box_scaled
 
-    def __call__(self, image_path, bounding_box):
+    def __call__(self, image_path, bounding_box) -> Tuple[float]:
         # TODO: make the boundary square shaped
 
         image_trimmed, image_shape, bounding_box_scaled = self._load_img(
             image_path, bounding_box
         )
         boxes, scores, class_ids, mask_maps = self.segment_objects(image_trimmed)
+        if mask_maps is None:
+            raise RuntimeError("Batsman segmentation was not found")
         boundaries = self._get_batsman_boundary(
             bounding_box_scaled, image_shape, mask_maps
         )
@@ -336,7 +339,7 @@ class ImageSegmentModel:
 
     def process_mask_output(self, mask_predictions, mask_output):
         if mask_predictions.shape[0] == 0:
-            return []
+            return None
 
         mask_output = np.squeeze(mask_output)
 
@@ -353,8 +356,8 @@ class ImageSegmentModel:
         # For every box/mask pair, get the mask map
         mask_maps = np.zeros((len(scale_boxes), self.img_height, self.img_width))
         blur_size = (
-            int(self.img_width / mask_width),
-            int(self.img_height / mask_height),
+            max(int(self.img_width / mask_width), 1),
+            max(int(self.img_height / mask_height), 1),
         )
         for i in range(len(scale_boxes)):
             scale_x1 = int(math.floor(scale_boxes[i][0]))

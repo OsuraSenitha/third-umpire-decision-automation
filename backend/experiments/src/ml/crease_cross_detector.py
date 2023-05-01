@@ -3,7 +3,13 @@ from typing import Dict, Tuple
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
-from .visualize import getx1y1x2y2FromRhoTheta, drawLine, drawSegment, drawSegments
+from .visualize import (
+    getx1y1x2y2FromRhoTheta,
+    drawLine,
+    drawSegment,
+    drawSegments,
+    drawRects,
+)
 
 
 class CreaseCrossDetector:
@@ -16,21 +22,35 @@ class CreaseCrossDetector:
             # output from the segmentation model (maped back to the image dimensios)
             H, W, _ = img.shape
 
-            xmax = int(max(batsmen_segment[0::2]) * W)
-            xmin = int(min(batsmen_segment[0::2]) * W)
-            left_trim = xmin + int((xmax - xmin) * batsmen_possible_clearence)
+            b_xmax = int(max(batsmen_segment[0::2]) * W)
+            b_xmin = int(min(batsmen_segment[0::2]) * W)
+            w_xmax = int(max(wicket_bbx[0::2]) * W)
+            w_xmin = int(min(wicket_bbx[0::2]) * W)
 
-            right_trim = int(wicket_bbx[0] * W)
+            if w_xmin < b_xmax:
+                batsman_in_left = False
+            else:
+                batsman_in_left = True
+
+            if batsman_in_left:
+                left_trim = b_xmin + int((b_xmax - b_xmin) * batsmen_possible_clearence)
+                right_trim = int(wicket_bbx[0] * W)
+            else:
+                right_trim = b_xmax - int(
+                    (b_xmax - b_xmin) * batsmen_possible_clearence
+                )
+                left_trim = int(wicket_bbx[2] * W)
 
             new_W = right_trim - left_trim
-
             new_x = np.array(batsmen_segment[0::2]) * W
             new_x -= left_trim
             new_x = new_x.clip(0) / new_W
             new_batsmen_segment = [*batsmen_segment]
             new_batsmen_segment[0::2] = new_x.tolist()
-
             focus_region = img[:, left_trim:right_trim, :]
+
+            if focus_region.shape[1] == 0:
+                raise RuntimeError("Batsman overlaps the wicket")
 
             return focus_region, new_batsmen_segment
 
@@ -111,9 +131,10 @@ class CreaseCrossDetector:
 
     def _detect_crease(self, edges, W, H):
         # Find the two bounding lines of the crease
-        threshold = 100
-        min_theta = -30 / 180 * np.pi
-        max_theta = 30 / 180 * np.pi
+        threshold = 40
+        theta_var = 15
+        min_theta = -theta_var / 180 * np.pi
+        max_theta = theta_var / 180 * np.pi
         lines = cv.HoughLines(
             edges,
             rho=1,
@@ -122,7 +143,7 @@ class CreaseCrossDetector:
             max_theta=max_theta,
             min_theta=min_theta,
         )
-        if len(lines) == 0:
+        if lines is None:
             raise RuntimeError("Crease not found")
         first_line = lines[0][0]
         intersections = list(
@@ -182,6 +203,18 @@ class CreaseCrossDetector:
             and crease_seg is not None
         )
 
+        H, W, _ = focus_region.shape
+        text = "Unavailable"
+        unavailable_img = (np.ones((H, W, 3)) * 255).astype(np.uint8)
+        font = cv.FONT_HERSHEY_SIMPLEX
+        org = (int(W / 3), int(H / 2))
+        fontScale = W / 500
+        color = (0, 0, 0)
+        thickness = 2
+        unavailable_img = cv.putText(
+            unavailable_img, text, org, font, fontScale, color, thickness, cv.LINE_AA
+        )
+
         segs_drawn_img = focus_region.copy()
 
         if crease_detected:
@@ -198,18 +231,7 @@ class CreaseCrossDetector:
             intersection_img = focus_region.copy()
             intersection_img[intersection] = [0, 0, 255]
         else:
-            H, W, _ = focus_region.shape
-            text = "Crease was not detected"
-            not_found_img = (np.ones((H, W, 3)) * 255).astype(np.uint8)
-            font = cv.FONT_HERSHEY_SIMPLEX
-            org = (int(W / 8), int(H / 2))
-            fontScale = W / 500
-            color = (0, 0, 0)
-            thickness = 2
-            not_found_img = cv.putText(
-                not_found_img, text, org, font, fontScale, color, thickness, cv.LINE_AA
-            )
-            line_drawn_img = intersection_img = not_found_img
+            line_drawn_img = intersection_img = unavailable_img
 
         segs_drawn_img = drawSegment(
             segs_drawn_img,
@@ -218,6 +240,11 @@ class CreaseCrossDetector:
             line_width_scale=0.004,
             overlay_ratio=0.3,
         )
+
+        if gray is None:
+            gray = unavailable_img
+        if edges is None:
+            edges = unavailable_img
 
         ax[0][0].imshow(cv.cvtColor(focus_region, cv.COLOR_BGR2RGB))
         ax[0][0].set_title("Focused region")
@@ -251,9 +278,8 @@ class CreaseCrossDetector:
         except RuntimeError as e:
             if str(e) == "Crease not found":
                 print("ALGO LOGS: Crease was not found")
-                first_line = (
-                    second_line
-                ) = intersection = crease_seg = passed_crease = None
+                first_line = second_line = intersection = crease_seg = None
+                passed_crease = True
             else:
                 raise e
 
@@ -305,18 +331,39 @@ class CreaseCrossDetector:
         save_path: str = "crease-pass-output.png",
     ) -> Dict:
         img = cv.imread(img_path)
-        focus_region, batsmen_segment_focused = self._extract_focus_region(
-            img, batsman_seg, wicket_bbx
-        )
-        (
-            passed,
-            edges,
-            gray,
-            first_line,
-            second_line,
-            intersection,
-            crease_seg,
-        ) = self._find_crease_pass(focus_region, batsmen_segment_focused)
+        try:
+            # drawn_img = drawRects(img, [[0, *wicket_bbx]], False)
+            # drawn_img = drawSegment(drawn_img, batsman_seg)
+            # plt.imshow(drawn_img)
+            # plt.show()
+            focus_region, batsmen_segment_focused = self._extract_focus_region(
+                img, batsman_seg, wicket_bbx
+            )
+            # print(focus_region.shape)
+            (
+                passed,
+                edges,
+                gray,
+                first_line,
+                second_line,
+                intersection,
+                crease_seg,
+            ) = self._find_crease_pass(focus_region, batsmen_segment_focused)
+        except RuntimeError as e:
+            if str(e) == "Batsman overlaps the wicket":
+                print("ALGO LOGS: Batsman overlaps the wicket")
+                focus_region = img
+                batsmen_segment_focused = batsman_seg
+                passed = True
+                edges = None
+                gray = None
+                first_line = None
+                second_line = None
+                intersection = None
+                crease_seg = None
+            else:
+                raise e
+
         self._save_results(
             focus_region,
             batsmen_segment_focused,

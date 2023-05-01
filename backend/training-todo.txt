@@ -1,0 +1,5 @@
+augment the color of wickets to give red and other colors
+comments: cannot detect when the batsman is covered with someone (dataset dose not cover the situation)
+            If the crease is not detected between the batsman and the wicket, the system will consider that the batsman has passed
+            If the batsman overlaps the wicket horizontally, the system will consider that the batsman has passed
+            the crease must be tilted between -15 to 15 degrees in the image
