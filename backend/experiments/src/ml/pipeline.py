@@ -78,9 +78,9 @@ class Pipeline:
     def _trim_wicket(self, img_path, wicket_box, wicket_img_path):
         img = cv.imread(img_path)
         H, W, _ = img.shape
+        wicket_box = wicket_box.copy()
         wicket_box[0::2] *= W
         wicket_box[1::2] *= H
         x1, y1, x2, y2 = wicket_box.astype(int)
-        print(x1, x2, y1, y2)
         wicket_img = img[y1:y2, x1:x2, :]
         cv.imwrite(wicket_img_path, wicket_img)
