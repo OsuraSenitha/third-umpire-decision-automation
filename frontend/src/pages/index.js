@@ -2,7 +2,7 @@ import Head from "next/head";
 import styles from "@/styles/pageStyles/index.js";
 import { Box, Button } from "@mui/material";
 import { PlayCircleOutline, RestartAlt } from "@mui/icons-material";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
     displayResults,
     handleClear,
@@ -13,8 +13,10 @@ import { LoadingButton } from "@mui/lab";
 import OutputRegion from "@/containers/outputRegion/OutputRegion";
 import commonStyles from "@/styles/commonStyles";
 import InputRegion from "@/containers/inputRegion/InputRegion";
+import { modalContext } from "@/providers/modalProvider/ModalProvider";
 
 export default function Home() {
+    const { setNotificationText } = useContext(modalContext);
     const initResults = { annotations: [] };
     const [umpImg, setUmpImg] = useState();
     const [imgDim, setImgDim] = useState();
@@ -68,6 +70,7 @@ export default function Home() {
                                     imgDim,
                                     setProcessing,
                                     setResults,
+                                    setNotificationText,
                                 }).catch(console.error)
                             }
                             variant="contained"

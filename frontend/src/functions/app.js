@@ -14,6 +14,7 @@ export const handleProcess = async ({
     imgDim,
     setProcessing,
     setResults,
+    setNotificationText,
 }) => {
     if (img) {
         setProcessing(true);
@@ -21,21 +22,23 @@ export const handleProcess = async ({
         const lambdaRes = await handleInfer(imgKey);
         console.log(lambdaRes);
         const parsed_res = JSON.parse(lambdaRes);
+        const body = parsed_res.body;
         if (parsed_res.statusCode == 200) {
-            console.log(parsed_res.body);
+            console.log(body);
             const batsman_img_src = await handleDownload({
-                imgS3Uri: parsed_res.body.batsman_analysis_img_s3_uri,
+                imgS3Uri: body.batsman_analysis_img_s3_uri,
             });
-            console.log(parsed_res.body.wicket_s3_uri);
+            console.log(body.wicket_s3_uri);
             const wicket_img_src = await handleDownload({
-                imgS3Uri: parsed_res.body.wicket_s3_uri,
+                imgS3Uri: body.wicket_s3_uri,
             });
-            parsed_res.body.batsman_img_src = batsman_img_src;
-            parsed_res.body.wicket_img_src = wicket_img_src;
-            setResults(parsed_res.body);
+            body.batsman_img_src = batsman_img_src;
+            body.wicket_img_src = wicket_img_src;
+            setResults(body);
             displayResults(lambdaRes, canvasRef, imgDim);
         } else {
-            console.error(parsed_res.body);
+            console.error(body);
+            setNotificationText(body.message);
         }
         setProcessing(false);
     }
