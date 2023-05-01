@@ -69,6 +69,12 @@ class OutputProcessor:
         self.results_key = results_key
 
     def __call__(self, pipe_results: PipelineOutput) -> Dict:
+        batsman_comment = (
+            "Unknown"
+            if pipe_results.batsman_result is None
+            else str(pipe_results.batsman_result)
+        )
+
         src_batsman_img_analysis_path = pipe_results.batsman_analysis_img_path
         src_wicket_img_path = pipe_results.wicket_img_path
         dst_batsman_s3_key = (
@@ -87,7 +93,7 @@ class OutputProcessor:
         dst_wicket_s3_uri = f"s3://{self.output_bucket}/{dst_wicket_s3_key}"
         body = {
             "annotations": pipe_results.annotations,
-            "batsman_comment": str(pipe_results.batsman_result),
+            "batsman_comment": batsman_comment,
             "batsman_analysis_img_s3_uri": dst_batsman_s3_uri,
             "wicket_s3_uri": dst_wicket_s3_uri,
             "wicket_comment": str(pipe_results.wicket_result),
