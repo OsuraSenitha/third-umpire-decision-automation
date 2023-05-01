@@ -99,11 +99,7 @@ class CreaseCrossDetector:
 
         return intersection
 
-    def _find_crease_pass(
-        self, focus_region, batsmen_segment, save_path="crease-pass-output.png"
-    ):
-        H, W, _ = focus_region.shape
-
+    def _detect_edges(self, focus_region: np.ndarray) -> np.ndarray:
         gray = cv.cvtColor(focus_region, cv.COLOR_BGR2GRAY)
         t_lower = 50  # Lower Threshold
         t_upper = 150  # Upper threshold
@@ -111,7 +107,9 @@ class CreaseCrossDetector:
         # Applying the Canny Edge filter
         # TODO: make the appature size dependant on the image dimensions
         edges = cv.Canny(gray, t_lower, t_upper)
+        return edges, gray
 
+    def _detect_crease(self, edges, W, H):
         # Find the two bounding lines of the crease
         threshold = 100
         min_theta = -30 / 180 * np.pi
@@ -144,6 +142,11 @@ class CreaseCrossDetector:
         second_line_id = not_intersecting.index(True) + 1
         second_line = lines[second_line_id][0]
 
+        return first_line, second_line
+
+    def _get_contour_intersection(
+        self, first_line, second_line, W, H, img_shape, batsmen_segment
+    ):
         # finding the intersection between the crease and the batsman
         first_line_xy = np.array(getx1y1x2y2FromRhoTheta(first_line)).astype(float)
         second_line_xy = np.array(getx1y1x2y2FromRhoTheta(second_line)).astype(float)
@@ -153,11 +156,24 @@ class CreaseCrossDetector:
         second_line_xy[1::2] = second_line_xy[1::2] / H
         crease_seg = [*np.roll(first_line_xy, 2).tolist(), *second_line_xy]
         intersection = self._get_segments_intersections(
-            focus_region.shape, batsmen_segment, crease_seg
+            img_shape, batsmen_segment, crease_seg
         )
-        passed_crease = intersection.any()
+        return intersection, crease_seg
 
+    def _draw_fig(
+        self,
+        focus_region,
+        first_line,
+        second_line,
+        batsmen_segment,
+        crease_seg,
+        intersection,
+        ax,
+        gray,
+        edges,
+    ):
         line_drawn_img = focus_region.copy()
+
         drawLine(line_drawn_img, first_line)
         drawLine(line_drawn_img, second_line)
 
@@ -180,7 +196,6 @@ class CreaseCrossDetector:
         intersection_img = focus_region.copy()
         intersection_img[intersection] = [0, 0, 255]
 
-        fig, ax = plt.subplots(2, 3, figsize=(9, 6))
         ax[0][0].imshow(cv.cvtColor(focus_region, cv.COLOR_BGR2RGB))
         ax[0][0].set_title("Focused region")
         ax[0][1].imshow(gray, cmap="gray")
@@ -199,11 +214,36 @@ class CreaseCrossDetector:
                 ax[i][j].set_xticks([])
                 ax[i][j].set_yticks([])
 
+        plt.tight_layout()
+
+    def _find_crease_pass(
+        self, focus_region, batsmen_segment, save_path="crease-pass-output.png"
+    ):
+        H, W, _ = focus_region.shape
+        edges, gray = self._detect_edges(focus_region)
+        # try
+        first_line, second_line = self._detect_crease(edges, W, H)
+        intersection, crease_seg = self._get_contour_intersection(
+            first_line, second_line, W, H, focus_region.shape, batsmen_segment
+        )
+        passed_crease = intersection.any()
+        # except
+
+        fig, ax = plt.subplots(2, 3, figsize=(9, 6))
+        self._draw_fig(
+            focus_region,
+            first_line,
+            second_line,
+            batsmen_segment,
+            crease_seg,
+            intersection,
+            ax,
+            gray,
+            edges,
+        )
         save_path = os.path.abspath(save_path)
         export_dir = os.path.split(save_path)[0]
         os.makedirs(export_dir, exist_ok=True)
-
-        plt.tight_layout()
         plt.savefig(save_path)
         plt.close()
 
