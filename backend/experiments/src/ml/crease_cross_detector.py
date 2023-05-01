@@ -172,12 +172,45 @@ class CreaseCrossDetector:
         gray,
         edges,
     ):
-        line_drawn_img = focus_region.copy()
+        # Following becomes None if the crease was not detected: first_line, second_line, intersection, crease_seg
+        # ax[0][0].text(0.15, 0.5, 'Crease was not detected', {"fontsize":8})
 
-        drawLine(line_drawn_img, first_line)
-        drawLine(line_drawn_img, second_line)
+        crease_detected = (
+            first_line is not None
+            and second_line is not None
+            and intersection is not None
+            and crease_seg is not None
+        )
 
         segs_drawn_img = focus_region.copy()
+
+        if crease_detected:
+            line_drawn_img = focus_region.copy()
+            drawLine(line_drawn_img, first_line)
+            drawLine(line_drawn_img, second_line)
+            segs_drawn_img = drawSegment(
+                segs_drawn_img,
+                crease_seg,
+                color=[0, 0, 255],
+                line_width_scale=0.004,
+                overlay_ratio=0.3,
+            )
+            intersection_img = focus_region.copy()
+            intersection_img[intersection] = [0, 0, 255]
+        else:
+            H, W, _ = focus_region.shape
+            text = "Crease was not detected"
+            not_found_img = (np.ones((H, W, 3)) * 255).astype(np.uint8)
+            font = cv.FONT_HERSHEY_SIMPLEX
+            org = (int(W / 8), int(H / 2))
+            fontScale = W / 500
+            color = (0, 0, 0)
+            thickness = 2
+            not_found_img = cv.putText(
+                not_found_img, text, org, font, fontScale, color, thickness, cv.LINE_AA
+            )
+            line_drawn_img = intersection_img = not_found_img
+
         segs_drawn_img = drawSegment(
             segs_drawn_img,
             batsmen_segment,
@@ -185,16 +218,6 @@ class CreaseCrossDetector:
             line_width_scale=0.004,
             overlay_ratio=0.3,
         )
-        segs_drawn_img = drawSegment(
-            segs_drawn_img,
-            crease_seg,
-            color=[0, 0, 255],
-            line_width_scale=0.004,
-            overlay_ratio=0.3,
-        )
-
-        intersection_img = focus_region.copy()
-        intersection_img[intersection] = [0, 0, 255]
 
         ax[0][0].imshow(cv.cvtColor(focus_region, cv.COLOR_BGR2RGB))
         ax[0][0].set_title("Focused region")
@@ -216,19 +239,46 @@ class CreaseCrossDetector:
 
         plt.tight_layout()
 
-    def _find_crease_pass(
-        self, focus_region, batsmen_segment, save_path="crease-pass-output.png"
-    ):
+    def _find_crease_pass(self, focus_region, batsmen_segment):
         H, W, _ = focus_region.shape
         edges, gray = self._detect_edges(focus_region)
-        # try
-        first_line, second_line = self._detect_crease(edges, W, H)
-        intersection, crease_seg = self._get_contour_intersection(
-            first_line, second_line, W, H, focus_region.shape, batsmen_segment
-        )
-        passed_crease = intersection.any()
-        # except
+        try:
+            first_line, second_line = self._detect_crease(edges, W, H)
+            intersection, crease_seg = self._get_contour_intersection(
+                first_line, second_line, W, H, focus_region.shape, batsmen_segment
+            )
+            passed_crease = intersection.any()
+        except RuntimeError as e:
+            if str(e) == "Crease not found":
+                print("ALGO LOGS: Crease was not found")
+                first_line = (
+                    second_line
+                ) = intersection = crease_seg = passed_crease = None
+            else:
+                raise e
 
+        return (
+            passed_crease,
+            edges,
+            gray,
+            first_line,
+            second_line,
+            intersection,
+            crease_seg,
+        )
+
+    def _save_results(
+        self,
+        focus_region,
+        batsmen_segment,
+        edges,
+        gray,
+        first_line,
+        second_line,
+        intersection,
+        crease_seg,
+        save_path,
+    ):
         fig, ax = plt.subplots(2, 3, figsize=(9, 6))
         self._draw_fig(
             focus_region,
@@ -247,8 +297,6 @@ class CreaseCrossDetector:
         plt.savefig(save_path)
         plt.close()
 
-        return passed_crease, save_path
-
     def __call__(
         self,
         img_path: str,
@@ -260,7 +308,25 @@ class CreaseCrossDetector:
         focus_region, batsmen_segment_focused = self._extract_focus_region(
             img, batsman_seg, wicket_bbx
         )
-        passed, save_path = self._find_crease_pass(
-            focus_region, batsmen_segment_focused, save_path
+        (
+            passed,
+            edges,
+            gray,
+            first_line,
+            second_line,
+            intersection,
+            crease_seg,
+        ) = self._find_crease_pass(focus_region, batsmen_segment_focused)
+        self._save_results(
+            focus_region,
+            batsmen_segment_focused,
+            edges,
+            gray,
+            first_line,
+            second_line,
+            intersection,
+            crease_seg,
+            save_path,
         )
+
         return passed
