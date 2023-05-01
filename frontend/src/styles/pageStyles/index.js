@@ -1,6 +1,5 @@
 export default {
     root: {
-        maxWidth: "720px",
         margin: "auto",
         minHeight: "100vh",
     },

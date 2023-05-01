@@ -25,13 +25,17 @@ export const handleProcess = async ({
         const body = parsed_res.body;
         if (parsed_res.statusCode == 200) {
             console.log(body);
-            const batsman_img_src = await handleDownload({
-                imgS3Uri: body.batsman_analysis_img_s3_uri,
-            });
+            let batsman_img_src = undefined;
+            if (body.batsman_analysis_img_s3_uri)
+                batsman_img_src = await handleDownload({
+                    imgS3Uri: body.batsman_analysis_img_s3_uri,
+                });
             console.log(body.wicket_s3_uri);
-            const wicket_img_src = await handleDownload({
-                imgS3Uri: body.wicket_s3_uri,
-            });
+            let wicket_img_src = undefined;
+            if (body.wicket_s3_uri)
+                wicket_img_src = await handleDownload({
+                    imgS3Uri: body.wicket_s3_uri,
+                });
             body.batsman_img_src = batsman_img_src;
             body.wicket_img_src = wicket_img_src;
             setResults(body);

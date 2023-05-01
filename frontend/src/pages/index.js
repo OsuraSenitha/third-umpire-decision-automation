@@ -95,7 +95,7 @@ export default function Home() {
                             Clear
                         </Button> */}
                     </Box>
-                    {results.batsman_img_src && (
+                    {(results.batsman_img_src || results.wicket_img_src) && (
                         <OutputRegion
                             batsmanImgSrc={results.batsman_img_src}
                             batsmanComment={results.batsman_comment}
