@@ -5,7 +5,7 @@ from typing import Any
 from .object_detector import ObjectDetectModel
 from .yolo_image_segmentor import ImageSegmentModel
 from .crease_cross_detector import CreaseCrossDetector
-from .classifier import Classifier
+from .wicket_classifier import WicketClassifier
 
 
 class PipelineOutput:
@@ -40,9 +40,9 @@ class PipelineOutput:
     def __str__(self) -> str:
         self_desc = {
             "annotations": self.annotations,
-            "batsman_result": self.batsman_result,
+            "batsman_result": str(self.batsman_result),
             "batsman_analysis_img_path": self.batsman_analysis_img_path,
-            "wicket_result": self.wicket_result,
+            "wicket_result": str(self.wicket_result),
             "wicket_img_path": self.wicket_img_path,
         }
         self_desc = json.dumps(self_desc, indent=2)
@@ -56,7 +56,7 @@ class Pipeline:
         object_detector = ObjectDetectModel(object_detect_model_path)
         image_segmentor = ImageSegmentModel(image_segment_model_path)
         crease_cross_detector = CreaseCrossDetector()
-        classifier = Classifier(classifier_model_path)
+        classifier = WicketClassifier(classifier_model_path)
 
         self.object_detector = object_detector
         self.image_segmentor = image_segmentor

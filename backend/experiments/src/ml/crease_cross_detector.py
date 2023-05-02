@@ -7,8 +7,6 @@ from .visualize import (
     getx1y1x2y2FromRhoTheta,
     drawLine,
     drawSegment,
-    drawSegments,
-    drawRects,
 )
 
 

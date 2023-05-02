@@ -3,6 +3,7 @@ import os, traceback
 from ml.pipeline import Pipeline
 from util.file import S3Downloader, OutputProcessor
 
+WEIGHTS_S3_URI = os.environ["WEIGHTS_S3_URI"]
 OBJ_DECT_WEIGHTS_NAME = os.environ["OBJ_DECT_WEIGHTS_NAME"]
 IM_SEG_WEIGHTS_NAME = os.environ["IM_SEG_WEIGHTS_NAME"]
 CLASSIFY_WEIGHTS_NAME = os.environ["CLASSIFY_WEIGHTS_NAME"]
@@ -11,9 +12,7 @@ OUTPUT_KEY = os.environ["OUTPUT_KEY"]
 
 MODELS_PATH = "/tmp/model-weights"
 downloader = S3Downloader()
-downloader.download(
-    "s3://third-umpire-decision-automation-osura/model-weights", MODELS_PATH
-)
+downloader.download(WEIGHTS_S3_URI, MODELS_PATH)
 OBJ_DECT_MODEL_PATH = f"{MODELS_PATH}/{OBJ_DECT_WEIGHTS_NAME}"
 IM_SEG_MODEL_PATH = f"{MODELS_PATH}/{IM_SEG_WEIGHTS_NAME}"
 CLASSIFY_MODEL_PATH = f"{MODELS_PATH}/{CLASSIFY_WEIGHTS_NAME}"
@@ -39,7 +38,7 @@ def handler(event, context):
             results = pipe(
                 img_path,
                 batsman_analysis_image_path="/tmp/results/batsman-analysis.jpg",
-                wicket_img_path="/tmp/results/wicket.jpg"
+                wicket_img_path="/tmp/results/wicket.jpg",
             )
             results = output_processor(results)
 
