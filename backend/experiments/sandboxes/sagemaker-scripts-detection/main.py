@@ -1,3 +1,4 @@
+import boto3
 import yaml
 from ultralytics import YOLO
 import os
@@ -32,4 +33,23 @@ if __name__ == "__main__":
         project=output_data_dir,
         name="cricket-object-detect",
         optimizer="Adam",
+    )
+
+    ses_client = boto3.client("ses")
+    response = ses_client.send_email(
+        Source="pereramat2000@gmail.com",
+        Destination={
+            "ToAddresses": ["pereramat2000@gmail.com"],
+        },
+        ReplyToAddresses=["pereramat2000@gmail.com"],
+        Message={
+            "Subject": {
+                "Data": "Cricket Object Detection Training Complete",
+                "Charset": "utf-8",
+            },
+            "Body": {
+                "Text": {"Data": "Done", "Charset": "utf-8"},
+                "Html": {"Data": "Done", "Charset": "utf-8"},
+            },
+        },
     )
