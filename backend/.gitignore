@@ -1,5 +1,6 @@
 .creds
 **__pycache__/
 experiments/data/*
+experiments/sandboxes/temp/*
 training-jobs
 model-weights

@@ -21,7 +21,7 @@ if __name__ == "__main__":
         yaml.dump(dataset_config, handler)
 
     patience = 50
-    epochs = 400
+    epochs = 500
 
     model = YOLO("yolov8n-seg.pt")
     model.train(
