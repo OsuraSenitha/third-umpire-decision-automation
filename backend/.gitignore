@@ -2,5 +2,6 @@
 **__pycache__/
 experiments/data/*
 experiments/sandboxes/temp/*
-training-jobs
-model-weights
+training-jobs/
+model-weights/
+training-jobs-aws/
