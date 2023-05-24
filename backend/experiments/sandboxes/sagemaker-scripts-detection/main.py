@@ -22,7 +22,7 @@ if __name__ == "__main__":
         yaml.dump(dataset_config, handler)
 
     patience = 50
-    epochs = 500
+    epochs = 230
 
     model = YOLO("yolov8n.pt")
     model.train(
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         optimizer="Adam",
     )
 
-    ses_client = boto3.client("ses")
+    ses_client = boto3.client("ses", region_name="ap-south-1")
     response = ses_client.send_email(
         Source="pereramat2000@gmail.com",
         Destination={

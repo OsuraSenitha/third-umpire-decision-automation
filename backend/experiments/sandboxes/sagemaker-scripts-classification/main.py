@@ -10,7 +10,7 @@ if __name__ == "__main__":
     output_data_dir = os.environ["SM_OUTPUT_DATA_DIR"]
 
     patience = 50
-    epochs = 5000
+    epochs = 50000
 
     model = YOLO("yolov8n-cls.pt")
     model.train(
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         batch=4,
     )
 
-    ses_client = boto3.client("ses")
+    ses_client = boto3.client("ses", region_name="ap-south-1")
     response = ses_client.send_email(
         Source="pereramat2000@gmail.com",
         Destination={
@@ -36,9 +36,6 @@ if __name__ == "__main__":
                 "Data": "Wicket Classification Training Complete",
                 "Charset": "utf-8",
             },
-            "Body": {
-                "Text": {"Data": "Done", "Charset": "utf-8"},
-                "Html": {"Data": "Done", "Charset": "utf-8"},
-            },
+            "Body": {"Text": {"Data": "Done", "Charset": "utf-8"}},
         },
     )
