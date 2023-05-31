@@ -62,6 +62,7 @@ class WicketClassifier:
         wicket_img = self._crop_wicket(img, bounding_box)
         input = self._prepare_input(wicket_img)
         output = self.session.run(self.output_names, input)
+        # [0.39817, 0.823301]
         pred = self._process_output(output)
 
         return pred

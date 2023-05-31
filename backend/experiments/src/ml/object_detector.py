@@ -182,6 +182,7 @@ class ObjectDetectModel:
         outputs = self.ort_session.run(
             self.output_names, {self.input_name: input_tensor}
         )[0]
+        print("Inference outputs shape", outputs.shape)
 
         predictions = np.squeeze(outputs).T
         # Filter out object confidence scores below threshold
@@ -256,6 +257,8 @@ class ObjectDetectModel:
         maxval = np.ones((boxes.shape[0], 2))
         boxes[:, :2] = np.max([boxes[:, :2], minval], axis=0)
         boxes[:, 2:] = np.min([boxes[:, 2:], maxval], axis=0)
+        print("Processed boxes shape", boxes.shape)
+        print("Processed boxes\n", boxes)
 
         output = ObjectDetectOutput(boxes, scores, labels, image)
 
