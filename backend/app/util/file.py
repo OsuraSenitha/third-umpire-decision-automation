@@ -13,6 +13,7 @@ class S3Downloader:
             else:
                 raise FileNotFoundError("AWS Credentials were not found")
         self.client = boto3.client("s3")
+        self.resource = boto3.resource("s3")
 
     def _is_dir(self, path):
         split = os.path.split(path)
@@ -40,14 +41,12 @@ class S3Downloader:
                     "If the s3_uri is a directory, download_loc cannot be a file"
                 )
             else:
-                all_objs = self.client.list_objects(Bucket=bucket_name)["Contents"]
-                dir_objs = [
-                    obj["Key"] for obj in all_objs if obj["Key"].startswith(obj_key)
+                bucket = self.resource.Bucket(bucket_name)
+                paths = [obj.key for obj in bucket.objects.filter(Prefix=obj_key)]
+                paths = [
+                    path for path in paths if not self._is_dir(path)
                 ]
-                dir_objs = [
-                    dir_obj for dir_obj in dir_objs if not self._is_dir(dir_obj)
-                ]
-                for src_path in dir_objs:
+                for src_path in paths:
                     dst_path = os.path.join(
                         download_loc, src_path.lstrip(obj_key).strip("/")
                     )
